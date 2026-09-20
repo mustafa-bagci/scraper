@@ -112,14 +112,23 @@ function describeActual(lead: ScorableLead, metric: ScoringMetric): string {
       return `${lead.badReviewCount.toLocaleString('en-US')} bad reviews`;
     case 'badReviewPercentage':
       return `${lead.badReviewPercentage.toFixed(1)}% bad reviews`;
+    // Booleans show the value itself rather than restating the rule label.
     case 'hasEmail':
-      return lead.email ? lead.email : 'No public email';
+      return lead.email ?? 'No public email';
     case 'hasWebsite':
-      return lead.website ? 'Website available' : 'No website';
+      return lead.website ? hostOf(lead.website) : 'No website';
     case 'hasPhone':
-      return lead.phone ? 'Phone available' : 'No phone';
+      return lead.phone ?? 'No phone';
     default:
       return '';
+  }
+}
+
+function hostOf(url: string): string {
+  try {
+    return new URL(url.startsWith('http') ? url : `https://${url}`).host.replace(/^www\./, '');
+  } catch {
+    return url;
   }
 }
 
