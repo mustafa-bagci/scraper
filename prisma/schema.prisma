@@ -1,0 +1,470 @@
+// Murgay Lead Intelligence — data model
+// PostgreSQL + Prisma. All provider-agnostic: nothing here references a
+// specific business-data vendor beyond the free-form `source` / `sourceUrl`
+// provenance fields.
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// ---------------------------------------------------------------------------
+// Enums
+// ---------------------------------------------------------------------------
+
+enum UserRole {
+  ADMIN
+  MEMBER
+}
+
+enum LeadStatus {
+  NEW
+  QUALIFIED
+  CONTACTED
+  REPLIED
+  INTERESTED
+  NOT_INTERESTED
+  CUSTOMER
+  ARCHIVED
+}
+
+enum EmailStatus {
+  UNKNOWN
+  FOUND
+  VALID
+  INVALID
+  RISKY
+  DISPOSABLE
+}
+
+enum WebsiteStatus {
+  UNKNOWN
+  REACHABLE
+  UNREACHABLE
+  BLOCKED
+  CRAWLED
+  NO_WEBSITE
+}
+
+enum JobStatus {
+  PENDING
+  RUNNING
+  COMPLETED
+  FAILED
+  CANCELLED
+}
+
+enum JobKind {
+  BUSINESS_SEARCH
+  EMAIL_DISCOVERY
+  EMAIL_VERIFICATION
+  IMPORT
+}
+
+enum ActivityType {
+  CREATED
+  IMPORTED
+  STATUS_CHANGED
+  NOTE_ADDED
+  EMAIL_FOUND
+  EMAIL_NOT_FOUND
+  EMAIL_VERIFIED
+  SCORE_UPDATED
+  ENRICHED
+  UPDATED
+}
+
+enum ExportFormat {
+  CSV
+  XLSX
+  JSON
+}
+
+// ---------------------------------------------------------------------------
+// Auth
+// ---------------------------------------------------------------------------
+
+model User {
+  id           String    @id @default(cuid())
+  email        String    @unique
+  name         String?
+  passwordHash String
+  role         UserRole  @default(ADMIN)
+  isActive     Boolean   @default(true)
+  lastLoginAt  DateTime?
+  createdAt    DateTime  @default(now())
+  updatedAt    DateTime  @updatedAt
+
+  sessions      AuthSession[]
+  leads         Lead[]
+  notes         LeadNote[]
+  activities    LeadActivity[]
+  savedSearches SavedSearch[]
+  searchRuns    SearchRun[]
+  jobs          Job[]
+  exports       ExportRecord[]
+  imports       ImportBatch[]
+
+  @@index([email])
+}
+
+model AuthSession {
+  id        String   @id @default(cuid())
+  userId    String
+  tokenHash String   @unique
+  userAgent String?
+  ipHash    String?
+  expiresAt DateTime
+  createdAt DateTime @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@index([expiresAt])
+}
+
+// ---------------------------------------------------------------------------
+// Leads
+// ---------------------------------------------------------------------------
+
+model Lead {
+  id         String  @id @default(cuid())
+  externalId String?
+  provider   String  @default("mock")
+
+  businessName String
+  category     String?
+  categories   String[] @default([])
+
+  country     String?
+  countryCode String?
+  region      String?
+  city        String?
+  postalCode  String?
+  address     String?
+  latitude    Float?
+  longitude   Float?
+
+  phone         String?
+  website       String?
+  websiteDomain String?
+
+  rating                   Float?
+  reviewCount              Int     @default(0)
+  oneStarCount             Int     @default(0)
+  twoStarCount             Int     @default(0)
+  threeStarCount           Int     @default(0)
+  fourStarCount            Int     @default(0)
+  fiveStarCount            Int     @default(0)
+  // Derived from the configurable "bad review" definition; persisted so it can
+  // be filtered and sorted in SQL.
+  badReviewCount           Int     @default(0)
+  badReviewPercentage      Float   @default(0)
+  reviewBreakdownAvailable Boolean @default(false)
+
+  email          String?
+  emailStatus    EmailStatus @default(UNKNOWN)
+  emailSource    String?
+  emailSourceUrl String?
+  emailFoundAt   DateTime?
+  emailCheckedAt DateTime?
+
+  websiteStatus    WebsiteStatus @default(UNKNOWN)
+  websiteCheckedAt DateTime?
+
+  leadScore      Int   @default(0)
+  scoreBreakdown Json?
+
+  status    LeadStatus @default(NEW)
+  source    String     @default("search")
+  sourceUrl String?
+
+  // Provenance / GDPR
+  collectedAt       DateTime @default(now())
+  collectionPurpose String   @default("B2B prospecting")
+
+  // Duplicate detection keys
+  dedupeKey       String?
+  normalizedName  String?
+  normalizedPhone String?
+
+  openNow        Boolean?
+  businessStatus String?
+
+  ownerId       String?
+  searchRunId   String?
+  importBatchId String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  owner       User?        @relation(fields: [ownerId], references: [id], onDelete: SetNull)
+  searchRun   SearchRun?   @relation(fields: [searchRunId], references: [id], onDelete: SetNull)
+  importBatch ImportBatch? @relation(fields: [importBatchId], references: [id], onDelete: SetNull)
+
+  reviews    Review[]
+  emails     LeadEmail[]
+  notes      LeadNote[]
+  activities LeadActivity[]
+
+  @@unique([provider, externalId], name: "provider_externalId")
+  @@unique([dedupeKey])
+  @@index([businessName])
+  @@index([city])
+  @@index([country])
+  @@index([category])
+  @@index([rating])
+  @@index([reviewCount])
+  @@index([badReviewCount])
+  @@index([badReviewPercentage])
+  @@index([leadScore])
+  @@index([email])
+  @@index([emailStatus])
+  @@index([status])
+  @@index([createdAt])
+  @@index([externalId])
+  @@index([normalizedName, normalizedPhone])
+}
+
+model Review {
+  id          String    @id @default(cuid())
+  leadId      String
+  externalId  String?
+  rating      Int
+  text        String?
+  authorName  String?
+  publishedAt DateTime?
+  language    String?
+  source      String?
+  sourceUrl   String?
+  collectedAt DateTime  @default(now())
+
+  lead Lead @relation(fields: [leadId], references: [id], onDelete: Cascade)
+
+  @@index([leadId])
+  @@index([rating])
+  @@index([leadId, rating])
+}
+
+model LeadEmail {
+  id                   String      @id @default(cuid())
+  leadId               String
+  email                String
+  status               EmailStatus @default(FOUND)
+  source               String?
+  sourceUrl            String?
+  isPrimary            Boolean     @default(false)
+  isGeneric            Boolean     @default(false)
+  score                Int         @default(0)
+  verifiedAt           DateTime?
+  verificationProvider String?
+  foundAt              DateTime    @default(now())
+
+  lead Lead @relation(fields: [leadId], references: [id], onDelete: Cascade)
+
+  @@unique([leadId, email])
+  @@index([leadId])
+  @@index([email])
+}
+
+model LeadNote {
+  id        String   @id @default(cuid())
+  leadId    String
+  userId    String?
+  body      String
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  lead Lead  @relation(fields: [leadId], references: [id], onDelete: Cascade)
+  user User? @relation(fields: [userId], references: [id], onDelete: SetNull)
+
+  @@index([leadId])
+}
+
+model LeadActivity {
+  id        String       @id @default(cuid())
+  leadId    String
+  userId    String?
+  type      ActivityType
+  message   String
+  metadata  Json?
+  createdAt DateTime     @default(now())
+
+  lead Lead  @relation(fields: [leadId], references: [id], onDelete: Cascade)
+  user User? @relation(fields: [userId], references: [id], onDelete: SetNull)
+
+  @@index([leadId])
+  @@index([createdAt])
+}
+
+// ---------------------------------------------------------------------------
+// Search
+// ---------------------------------------------------------------------------
+
+model SavedSearch {
+  id          String    @id @default(cuid())
+  userId      String?
+  name        String
+  description String?
+  filters     Json
+  runCount    Int       @default(0)
+  lastRunAt   DateTime?
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+
+  user       User?       @relation(fields: [userId], references: [id], onDelete: SetNull)
+  searchRuns SearchRun[]
+
+  @@index([userId])
+  @@index([createdAt])
+}
+
+model SearchRun {
+  id            String  @id @default(cuid())
+  userId        String?
+  savedSearchId String?
+  label         String
+  filters       Json
+  provider      String
+
+  status        JobStatus @default(PENDING)
+  progress      Int       @default(0)
+  statusMessage String?
+  error         String?
+
+  discovered    Int @default(0)
+  unique        Int @default(0)
+  duplicates    Int @default(0)
+  matched       Int @default(0)
+  created       Int @default(0)
+  updated       Int @default(0)
+  providerCalls Int @default(0)
+
+  startedAt  DateTime?
+  finishedAt DateTime?
+  createdAt  DateTime  @default(now())
+
+  user        User?        @relation(fields: [userId], references: [id], onDelete: SetNull)
+  savedSearch SavedSearch? @relation(fields: [savedSearchId], references: [id], onDelete: SetNull)
+  leads       Lead[]
+
+  @@index([userId])
+  @@index([status])
+  @@index([createdAt])
+}
+
+// ---------------------------------------------------------------------------
+// Background jobs (email discovery, verification, imports)
+// ---------------------------------------------------------------------------
+
+model Job {
+  id            String    @id @default(cuid())
+  userId        String?
+  kind          JobKind
+  status        JobStatus @default(PENDING)
+  total         Int       @default(0)
+  processed     Int       @default(0)
+  succeeded     Int       @default(0)
+  failed        Int       @default(0)
+  payload       Json?
+  result        Json?
+  error         String?
+  statusMessage String?
+  startedAt     DateTime?
+  finishedAt    DateTime?
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+
+  user User? @relation(fields: [userId], references: [id], onDelete: SetNull)
+
+  @@index([userId])
+  @@index([kind, status])
+  @@index([createdAt])
+}
+
+// ---------------------------------------------------------------------------
+// Exports / imports
+// ---------------------------------------------------------------------------
+
+model ExportRecord {
+  id        String       @id @default(cuid())
+  userId    String?
+  format    ExportFormat
+  scope     String
+  rowCount  Int          @default(0)
+  filters   Json?
+  fileName  String
+  createdAt DateTime     @default(now())
+
+  user User? @relation(fields: [userId], references: [id], onDelete: SetNull)
+
+  @@index([userId])
+  @@index([createdAt])
+}
+
+model ImportBatch {
+  id         String    @id @default(cuid())
+  userId     String?
+  fileName   String
+  status     JobStatus @default(PENDING)
+  totalRows  Int       @default(0)
+  imported   Int       @default(0)
+  duplicates Int       @default(0)
+  skipped    Int       @default(0)
+  mapping    Json?
+  error      String?
+  createdAt  DateTime  @default(now())
+  finishedAt DateTime?
+
+  user  User?  @relation(fields: [userId], references: [id], onDelete: SetNull)
+  leads Lead[]
+
+  @@index([userId])
+  @@index([createdAt])
+}
+
+// ---------------------------------------------------------------------------
+// Configuration
+// ---------------------------------------------------------------------------
+
+/// Key/value application settings (scoring rules, crawler limits, review
+/// definition, export defaults...). Values are validated with Zod on read.
+model Setting {
+  key       String   @id
+  value     Json
+  updatedAt DateTime @updatedAt
+}
+
+/// Provider registration + encrypted credentials. Secrets are encrypted at
+/// rest with AUTH_SECRET-derived key and are NEVER sent to the browser.
+model ProviderConfig {
+  id            String    @id @default(cuid())
+  kind          String
+  name          String
+  isActive      Boolean   @default(false)
+  apiKeyCipher  String?
+  apiKeyHint    String?
+  options       Json?
+  lastCheckedAt DateTime?
+  lastError     String?
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+
+  @@unique([kind, name])
+  @@index([kind])
+}
+
+/// Daily usage counters backing the cost-control limits.
+model UsageCounter {
+  id    String @id @default(cuid())
+  scope String
+  day   String
+  count Int    @default(0)
+
+  @@unique([scope, day])
+  @@index([day])
+}

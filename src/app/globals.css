@@ -1,0 +1,137 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  :root {
+    --background: 210 20% 98%;
+    --foreground: 222 47% 11%;
+
+    --card: 0 0% 100%;
+    --card-foreground: 222 47% 11%;
+
+    --popover: 0 0% 100%;
+    --popover-foreground: 222 47% 11%;
+
+    --primary: 222 47% 11%;
+    --primary-foreground: 210 40% 98%;
+
+    --secondary: 210 40% 96%;
+    --secondary-foreground: 222 47% 11%;
+
+    --muted: 210 40% 96%;
+    --muted-foreground: 215 16% 47%;
+
+    --accent: 214 95% 93%;
+    --accent-foreground: 221 83% 33%;
+
+    --destructive: 0 72% 51%;
+    --destructive-foreground: 0 0% 100%;
+
+    --success: 142 71% 34%;
+    --success-foreground: 0 0% 100%;
+
+    --warning: 32 95% 44%;
+    --warning-foreground: 0 0% 100%;
+
+    --border: 214 32% 91%;
+    --input: 214 32% 91%;
+    --ring: 221 83% 53%;
+
+    /* Categorical series palette. Validated for CVD separation, chroma,
+       lightness band and surface contrast — see README "Chart palette". */
+    --chart-1: 221 83% 53%;
+    --chart-2: 175 84% 32%;
+    --chart-3: 32 95% 54%;
+    --chart-4: 340 75% 55%;
+    --chart-5: 262 83% 58%;
+
+    --radius: 0.625rem;
+  }
+
+  .dark {
+    --background: 222 47% 7%;
+    --foreground: 210 40% 96%;
+
+    --card: 222 40% 10%;
+    --card-foreground: 210 40% 96%;
+
+    --popover: 222 40% 10%;
+    --popover-foreground: 210 40% 96%;
+
+    --primary: 210 40% 96%;
+    --primary-foreground: 222 47% 11%;
+
+    --secondary: 217 33% 17%;
+    --secondary-foreground: 210 40% 96%;
+
+    --muted: 217 33% 17%;
+    --muted-foreground: 215 20% 65%;
+
+    --accent: 217 33% 20%;
+    --accent-foreground: 213 94% 78%;
+
+    --destructive: 0 63% 51%;
+    --destructive-foreground: 0 0% 100%;
+
+    --success: 142 60% 45%;
+    --success-foreground: 0 0% 100%;
+
+    --warning: 32 90% 55%;
+    --warning-foreground: 222 47% 11%;
+
+    --border: 217 33% 20%;
+    --input: 217 33% 22%;
+    --ring: 213 94% 68%;
+
+    /* Dark steps are chosen and validated against the dark surface, not
+       derived by inverting the light palette. */
+    --chart-1: 220 82% 65%;
+    --chart-2: 173 63% 37%;
+    --chart-3: 35 75% 43%;
+    --chart-4: 341 68% 62%;
+    --chart-5: 257 71% 68%;
+  }
+
+  * {
+    @apply border-border;
+  }
+
+  html {
+    -webkit-text-size-adjust: 100%;
+  }
+
+  body {
+    @apply bg-background text-foreground antialiased;
+    font-feature-settings: 'cv02', 'cv03', 'cv04', 'cv11';
+    text-rendering: optimizeLegibility;
+  }
+
+  /* Tabular figures keep dense metric columns from jittering. */
+  .tabular {
+    font-variant-numeric: tabular-nums;
+  }
+
+  ::selection {
+    @apply bg-primary/15;
+  }
+}
+
+@layer components {
+  .surface {
+    @apply rounded-xl border border-border bg-card shadow-[0_1px_2px_rgba(15,23,42,0.04)];
+  }
+
+  .scrollbar-thin {
+    scrollbar-width: thin;
+  }
+
+  .scrollbar-thin::-webkit-scrollbar {
+    height: 8px;
+    width: 8px;
+  }
+
+  .scrollbar-thin::-webkit-scrollbar-thumb {
+    @apply rounded-full bg-border;
+  }
+}
