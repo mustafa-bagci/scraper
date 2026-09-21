@@ -215,7 +215,7 @@ export function SearchConsole({
             <TextFilter
               id="category"
               label="Category"
-              placeholder="Dentiste"
+              placeholder="dentist, dental clinic"
               value={filters.category}
               onChange={(value) => update('category', value)}
               list={CATEGORY_SUGGESTIONS}

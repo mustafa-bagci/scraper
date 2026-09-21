@@ -11,6 +11,7 @@
  */
 import assert from 'node:assert/strict';
 import { DataForSEOProvider, buildTask, toBreakdown, toCountryCode } from '../src/lib/providers/business/DataForSEOProvider';
+import { matchesFilters } from '../src/lib/filters/engine';
 import { computeReviewStats } from '../src/lib/reviews/stats';
 import { scoreLead } from '../src/lib/scoring/engine';
 import { DEFAULT_REVIEW_SETTINGS, DEFAULT_SCORING } from '../src/types/settings';
@@ -120,6 +121,11 @@ await t('no more than eight conditions are sent', () => {
   assert.ok((task.filters as unknown[]).length <= 15, 'the expression must stay within the provider limit');
 });
 
+await t('several categories can be searched at once', () => {
+  const task = buildTask({ category: 'dentist, Dental Clinic , ', limit: 50 }, 0, 50);
+  assert.deepEqual(task.categories, ['dentist', 'dental_clinic'], 'blank entries are dropped');
+});
+
 await t('a free-text keyword searches the title, not the taxonomy', () => {
   const task = buildTask({ keyword: 'cabinet urgence', limit: 50 }, 0, 50);
   assert.equal(task.title, 'cabinet urgence');
@@ -187,6 +193,56 @@ await t('the rating distribution drives the bad-review numbers', async () => {
   );
   // rating<=4 (25) + reviews>=100 (20) + bad%>=10 (20) + website (5) + phone (5)
   assert.equal(score.score, 75);
+});
+
+await t('a record survives the very filters that fetched it', async () => {
+  // The invariant a live search broke: five businesses were bought from the
+  // provider and all five were then discarded locally, because the provider
+  // reports "FR" and the search asked for "France".
+  const filters = { country: 'France', city: 'Lyon', rating: { max: 4.2 }, reviewCount: { min: 30 } };
+
+  stubFetch(okResponse([{ ...LISTING, rating: { value: 4.1, votes_count: 1305 } }]));
+  const page = await new DataForSEOProvider('u:p').searchBusinesses({
+    country: 'France', city: 'Lyon', ratingMax: 4.2, reviewCountMin: 30, limit: 50,
+  });
+  const business = page.businesses[0]!;
+
+  assert.equal(business.country, 'France', 'the country field must hold a name, not a code');
+  assert.equal(business.countryCode, 'FR', 'the code keeps its own field');
+
+  const stats = computeReviewStats(business.ratingBreakdown, business.reviewCount, DEFAULT_REVIEW_SETTINGS);
+  const matched = matchesFilters(
+    {
+      businessName: business.name, category: business.primaryCategory, categories: business.categories,
+      country: business.country, countryCode: business.countryCode, region: business.region,
+      city: business.city, postalCode: business.postalCode, address: business.address,
+      rating: business.rating, reviewCount: stats.reviewCount,
+      badReviewCount: stats.badReviewCount, badReviewPercentage: stats.badReviewPercentage,
+      oneStarCount: stats.oneStarCount, twoStarCount: stats.twoStarCount, leadScore: 0,
+      website: business.website, email: business.email, phone: business.phone, openNow: business.openNow,
+    },
+    filters,
+  );
+
+  assert.equal(matched, true, 'a paid-for record must not be discarded by the filter that asked for it');
+});
+
+await t('a country filter accepts either a name or an ISO code', async () => {
+  stubFetch(okResponse([LISTING]));
+  const business = (await new DataForSEOProvider('u:p').searchBusinesses({ limit: 1 })).businesses[0]!;
+
+  const base = {
+    businessName: business.name, category: business.primaryCategory, categories: business.categories,
+    country: business.country, countryCode: business.countryCode, region: business.region,
+    city: business.city, postalCode: business.postalCode, address: business.address,
+    rating: business.rating, reviewCount: business.reviewCount,
+    badReviewCount: 0, badReviewPercentage: 0, oneStarCount: 0, twoStarCount: 0, leadScore: 0,
+    website: business.website, email: business.email, phone: business.phone, openNow: null,
+  };
+
+  assert.equal(matchesFilters(base, { country: 'France' }), true);
+  assert.equal(matchesFilters(base, { country: 'FR' }), true);
+  assert.equal(matchesFilters(base, { country: 'Belgique' }), false, 'the wrong country must still be refused');
 });
 
 await t('a missing or empty distribution is reported as unavailable, never as zero', async () => {

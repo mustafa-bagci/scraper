@@ -170,7 +170,7 @@ export class DataForSEOProvider implements BusinessDataProvider {
       categories: [item.category, ...(item.additional_categories ?? [])].filter(
         (value): value is string => typeof value === 'string' && value.length > 0,
       ),
-      country: info.country_code ?? null,
+      country: toCountryName(info.country_code),
       countryCode: info.country_code ?? null,
       region: info.region ?? null,
       city: info.city ?? null,
@@ -216,6 +216,32 @@ const COUNTRY_CODES: Record<string, string> = {
   turkey: 'TR',
 };
 
+/** Reverse of COUNTRY_CODES: the name to display for a code. */
+const COUNTRY_NAMES: Record<string, string> = {
+  FR: 'France',
+  BE: 'Belgique',
+  CH: 'Suisse',
+  LU: 'Luxembourg',
+  NL: 'Nederland',
+  DE: 'Deutschland',
+  ES: 'España',
+  IT: 'Italia',
+  GB: 'United Kingdom',
+  TR: 'Türkiye',
+};
+
+/**
+ * The country *name* for a code.
+ *
+ * The provider only reports `country_code`, and putting that in the name field
+ * meant a search for "France" compared "FR" to "France" and discarded every
+ * record it had just paid for.
+ */
+export function toCountryName(code: string | null | undefined): string | null {
+  if (!code) return null;
+  return COUNTRY_NAMES[code.toUpperCase()] ?? code.toUpperCase();
+}
+
 export function toCountryCode(value: string | undefined): string | undefined {
   if (!value) return undefined;
   const trimmed = value.trim();
@@ -257,9 +283,17 @@ export function buildTask(params: BusinessSearchParams, offset: number, limit: n
 
   const task: Record<string, unknown> = { limit, offset };
 
-  // DataForSEO matches categories against its own taxonomy, so a free-text
+  // DataForSEO matches categories against its own taxonomy and accepts several
+  // at once, so a comma-separated list widens a search that is coming back
+  // thin — "dentist, dental clinic" rather than one narrow term. A free-text
   // keyword is sent as a title search instead.
-  if (params.category) task.categories = [normaliseCategory(params.category)];
+  if (params.category) {
+    const categories = params.category
+      .split(',')
+      .map((value) => normaliseCategory(value))
+      .filter((value) => value.length > 0);
+    if (categories.length > 0) task.categories = categories;
+  }
   if (params.keyword) task.title = params.keyword.trim();
 
   if (filters.length > 0) task.filters = joinFilters(filters.slice(0, MAX_FILTERS));

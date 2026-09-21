@@ -12,7 +12,16 @@ import type { LeadFilters, Presence } from '@/types/filters';
 export function toPrismaWhere(filters: LeadFilters): Prisma.LeadWhereInput {
   const and: Prisma.LeadWhereInput[] = [];
 
-  if (filters.country) and.push({ country: { equals: filters.country, mode: 'insensitive' } });
+  if (filters.country) {
+    // Providers disagree about whether "country" is a name or an ISO code, so
+    // a search for France has to reach leads stored either way.
+    and.push({
+      OR: [
+        { country: { equals: filters.country, mode: 'insensitive' } },
+        { countryCode: { equals: filters.country, mode: 'insensitive' } },
+      ],
+    });
+  }
   if (filters.region) and.push({ region: { contains: filters.region, mode: 'insensitive' } });
   if (filters.city) and.push({ city: { contains: filters.city, mode: 'insensitive' } });
   if (filters.postalCode) and.push({ postalCode: { startsWith: filters.postalCode } });
@@ -114,6 +123,7 @@ export type FilterableRecord = {
   category: string | null;
   categories?: string[];
   country: string | null;
+  countryCode?: string | null;
   region: string | null;
   city: string | null;
   postalCode: string | null;
@@ -132,7 +142,13 @@ export type FilterableRecord = {
 };
 
 export function matchesFilters(record: FilterableRecord, filters: LeadFilters): boolean {
-  if (filters.country && !equalsLoose(record.country, filters.country)) return false;
+  if (
+    filters.country &&
+    !equalsLoose(record.country, filters.country) &&
+    !equalsLoose(record.countryCode ?? null, filters.country)
+  ) {
+    return false;
+  }
   if (filters.region && !containsLoose(record.region, filters.region)) return false;
   if (filters.city && !containsLoose(record.city, filters.city)) return false;
   if (filters.postalCode && !(record.postalCode ?? '').startsWith(filters.postalCode)) return false;
