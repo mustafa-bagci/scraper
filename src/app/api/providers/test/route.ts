@@ -25,14 +25,9 @@ export const POST = withAuth(
     const body = await parseBody(request, schema);
     const provider = await getBusinessProvider();
 
-    if (!provider.isConfigured()) {
-      return apiSuccess({
-        ok: false,
-        provider: { id: provider.id, name: provider.name },
-        error: 'This provider has no credentials configured yet.',
-      });
-    }
-
+    // No early return for an unconfigured provider: each one explains its own
+    // requirement ("credentials must be login:password"), and a generic
+    // "not configured" hides which of several causes is the real one.
     const started = Date.now();
     try {
       const page = await provider.searchBusinesses({

@@ -652,6 +652,10 @@ function ProviderCard({
 
   const descriptor = options.find((option) => option.id === selected);
 
+  // Selecting a provider or typing a key changes nothing until it is saved,
+  // and testing before saving reports the previous state — which reads as a bug.
+  const unsaved = selected !== status?.activeId || apiKey.trim().length > 0;
+
   const save = async () => {
     setSaving(true);
     try {
@@ -731,11 +735,19 @@ function ProviderCard({
               disabled={!descriptor?.requiresApiKey}
               placeholder={
                 descriptor?.requiresApiKey
-                  ? (status?.apiKeyHint ?? 'Paste the provider API key')
+                  ? (descriptor.credentialHint ?? 'Paste the provider API key')
                   : 'Not required for this provider'
               }
               onChange={(event) => setApiKey(event.target.value)}
             />
+            {descriptor?.requiresApiKey ? (
+              <p className="text-2xs text-muted-foreground">
+                {descriptor.credentialHint ? `${descriptor.credentialHint}. ` : ''}
+                {status?.activeId === selected && status?.hasApiKey
+                  ? 'A credential is stored — leave this blank to keep it.'
+                  : 'No credential stored for this provider yet.'}
+              </p>
+            ) : null}
           </div>
         </div>
 
@@ -760,7 +772,14 @@ function ProviderCard({
           </p>
           <div className="flex items-center gap-2">
             {kind === 'business' ? (
-              <Button size="sm" variant="outline" onClick={runTest} loading={testing}>
+              <Button
+                size="sm"
+                variant="outline"
+                onClick={runTest}
+                loading={testing}
+                disabled={unsaved}
+                title={unsaved ? 'Save the provider first — a test runs against what is stored.' : undefined}
+              >
                 <Plug />
                 Test connection
               </Button>
@@ -770,6 +789,12 @@ function ProviderCard({
             </Button>
           </div>
         </div>
+
+        {kind === 'business' && unsaved ? (
+          <p className="text-2xs text-muted-foreground">
+            Save before testing — the test runs against the stored configuration, not what is on screen.
+          </p>
+        ) : null}
 
         {testResult ? (
           <div className="space-y-1.5">

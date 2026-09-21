@@ -39,6 +39,8 @@ export type ProviderDescriptor = {
   label: string;
   description: string;
   requiresApiKey: boolean;
+  /** What to paste, when the shape is not simply "an API key". */
+  credentialHint?: string;
 };
 
 export const AVAILABLE_PROVIDERS: ProviderDescriptor[] = [
@@ -54,8 +56,9 @@ export const AVAILABLE_PROVIDERS: ProviderDescriptor[] = [
     id: 'dataforseo',
     label: 'DataForSEO Business Listings',
     description:
-      'Publishes the 1★–5★ distribution, so bad-review counts, percentages and filters all work. Credentials are your API login and password as login:password.',
+      'Publishes the 1★–5★ distribution, so bad-review counts, percentages and filters all work.',
     requiresApiKey: true,
+    credentialHint: 'Your DataForSEO API login and password joined by a colon — login:password',
   },
   {
     kind: 'business',
@@ -64,6 +67,7 @@ export const AVAILABLE_PROVIDERS: ProviderDescriptor[] = [
     description:
       'Official Places API (New). Supplies rating and total review count; the star distribution is not exposed by this API.',
     requiresApiKey: true,
+    credentialHint: 'A Google Cloud API key with Places API (New) enabled',
   },
   {
     kind: 'email-finder',
@@ -107,11 +111,24 @@ type ResolvedSelection = { id: string; apiKey: string | null; fromDatabase: bool
 async function resolveSelection(kind: ProviderKind, envId: string, envKey: string | undefined): Promise<ResolvedSelection> {
   const active = await prisma.providerConfig.findFirst({ where: { kind, isActive: true } });
   if (active) {
-    return {
-      id: active.name,
-      apiKey: active.apiKeyCipher ? decryptSecret(active.apiKeyCipher) : (envKey ?? null),
-      fromDatabase: true,
-    };
+    let apiKey = envKey ?? null;
+
+    if (active.apiKeyCipher) {
+      const decrypted = decryptSecret(active.apiKeyCipher);
+      if (decrypted === null) {
+        // Almost always a rotated AUTH_SECRET: the key is there but the
+        // derived decryption key no longer matches. Silently falling back to
+        // the environment would present this as "no credentials".
+        console.error(
+          `[providers] the stored ${kind} credential could not be decrypted. ` +
+            'AUTH_SECRET has probably changed since it was saved — re-enter it in Settings.',
+        );
+      } else {
+        apiKey = decrypted;
+      }
+    }
+
+    return { id: active.name, apiKey, fromDatabase: true };
   }
   return { id: envId, apiKey: envKey ?? null, fromDatabase: false };
 }
