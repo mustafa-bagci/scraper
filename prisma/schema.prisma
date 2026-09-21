@@ -42,7 +42,11 @@ enum LeadStatus {
 }
 
 enum EmailStatus {
+  /// Never looked for.
   UNKNOWN
+  /// Looked for, and the business publishes none. Distinct from UNKNOWN so a
+  /// lead that has been checked is never re-queued as though it had not.
+  NOT_FOUND
   FOUND
   VALID
   INVALID

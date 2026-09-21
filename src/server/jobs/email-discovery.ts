@@ -181,11 +181,16 @@ async function processEmailSlice(jobId: string, budgetMs: number): Promise<Job> 
 
       if (result.candidates.length === 0) {
         failed += 1;
+        const reachable = result.pagesChecked.some((page) => page.ok);
         await prisma.lead.update({
           where: { id: leadId },
           data: {
+            // A checked lead with nothing published is a result, not an
+            // absence of one: leaving it UNKNOWN made it indistinguishable
+            // from a lead nobody had looked at yet.
+            emailStatus: EmailStatus.NOT_FOUND,
             emailCheckedAt: new Date(),
-            websiteStatus: result.pagesChecked.some((p) => p.ok) ? WebsiteStatus.CRAWLED : WebsiteStatus.UNREACHABLE,
+            websiteStatus: reachable ? WebsiteStatus.CRAWLED : WebsiteStatus.UNREACHABLE,
             websiteCheckedAt: new Date(),
           },
         });

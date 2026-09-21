@@ -580,8 +580,11 @@ function LeadCell({ column, row }: { column: ColumnId; row: LeadRow }) {
           </span>
           <EmailStatusBadge status={row.emailStatus} />
         </span>
-      ) : (
+      ) : row.emailStatus === 'UNKNOWN' ? (
+        // Nobody has looked yet — different from having looked and found none.
         <span className="text-muted-foreground">—</span>
+      ) : (
+        <EmailStatusBadge status={row.emailStatus} />
       );
     case 'score':
       return <ScorePill score={row.leadScore} />;

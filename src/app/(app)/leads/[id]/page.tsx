@@ -34,7 +34,7 @@ import { EmptyState } from '@/components/ui/empty-state';
 import { Progress } from '@/components/ui/progress';
 import { Separator } from '@/components/ui/separator';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { getLeadDetail } from '@/server/leads/service';
+import { getLeadDetail, type LeadDetail } from '@/server/leads/service';
 import { getSettings } from '@/lib/settings/service';
 import { getProviderStatuses } from '@/lib/providers/registry';
 import { parseStoredBreakdown } from '@/lib/scoring/engine';
@@ -330,12 +330,12 @@ export default async function LeadDetailPage({ params }: Params) {
                 ) : (
                   <EmptyState
                     icon={Mail}
-                    title="No public email discovered"
-                    description={
-                      lead.website
-                        ? 'Run “Find email” to check the public pages of this business’s own website.'
-                        : 'This business has no website on record, so there is no public page to read an address from.'
+                    title={
+                      lead.emailStatus === 'NOT_FOUND'
+                        ? 'No public email on this website'
+                        : 'No public email discovered'
                     }
+                    description={describeMissingEmail(lead)}
                   />
                 )}
               </CardContent>
@@ -521,6 +521,33 @@ export default async function LeadDetailPage({ params }: Params) {
       </div>
     </>
   );
+}
+
+/**
+ * Why there is no address, which decides whether it is worth looking again.
+ *
+ * "Checked and the site publishes none" is a finished answer; "the site could
+ * not be reached" is a temporary one. Showing the same empty state for both,
+ * and for a lead nobody has checked yet, hid that difference.
+ */
+function describeMissingEmail(lead: LeadDetail): string {
+  if (!lead.website) {
+    return 'This business has no website on record, so there is no public page to read an address from.';
+  }
+
+  if (lead.emailStatus !== 'NOT_FOUND') {
+    return 'Run “Find email” to check the public pages of this business’s own website.';
+  }
+
+  if (lead.websiteStatus === 'UNREACHABLE') {
+    return `The website could not be reached when it was checked${
+      lead.emailCheckedAt ? ` on ${formatDate(lead.emailCheckedAt)}` : ''
+    }. That is usually temporary — worth running “Find email” again later.`;
+  }
+
+  return `The website was read${
+    lead.emailCheckedAt ? ` on ${formatDate(lead.emailCheckedAt)}` : ''
+  }, but it publishes no email address. Phone is the way in here.`;
 }
 
 function DetailRow({

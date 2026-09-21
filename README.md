@@ -351,7 +351,14 @@ Business → website → homepage → contact → about → legal/imprint → fo
 - Every stored address keeps `emailSource` and the exact `emailSourceUrl` it was
   read from — visible on the lead page and included in exports.
 
-Statuses: `UNKNOWN`, `FOUND`, `VALID`, `INVALID`, `RISKY`, `DISPOSABLE`.
+Statuses: `UNKNOWN` (never checked), `NOT_FOUND` (checked, the site publishes
+none), `FOUND`, `VALID`, `INVALID`, `RISKY`, `DISPOSABLE`.
+
+`NOT_FOUND` is a result, not an absence of one. Without it a lead that had been
+checked looked exactly like one nobody had touched, which meant paying to crawl
+it again and no way to exclude it from an export. The lead page also says
+*which* kind of nothing it was — the site was read and publishes no address
+(phone is the way in) or the site could not be reached (worth retrying).
 
 With no verifier configured the UI says **"Verification unavailable"**. It does
 not claim an address is valid. The bundled `syntax` verifier screens malformed

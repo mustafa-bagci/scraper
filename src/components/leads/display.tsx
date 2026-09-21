@@ -27,7 +27,8 @@ const LEAD_STATUS_VARIANT: Record<LeadStatus, BadgeProps['variant']> = {
 };
 
 export const EMAIL_STATUS_LABELS: Record<EmailStatus, string> = {
-  UNKNOWN: 'Unknown',
+  UNKNOWN: 'Not checked',
+  NOT_FOUND: 'Not found',
   FOUND: 'Found',
   VALID: 'Valid',
   INVALID: 'Invalid',
@@ -37,6 +38,7 @@ export const EMAIL_STATUS_LABELS: Record<EmailStatus, string> = {
 
 const EMAIL_STATUS_VARIANT: Record<EmailStatus, BadgeProps['variant']> = {
   UNKNOWN: 'outline',
+  NOT_FOUND: 'warning',
   FOUND: 'info',
   VALID: 'success',
   INVALID: 'destructive',
