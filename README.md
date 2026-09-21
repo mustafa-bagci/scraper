@@ -544,9 +544,10 @@ pooled or the direct URL, derives the other, and generates `AUTH_SECRET`.
 provider API keys at rest. Rotating it logs everyone out and makes stored keys
 unreadable, so generate it once and keep it.
 
-`DIRECT_URL` is only read by `prisma migrate` during the build — the running app
-never uses it — but the build fails without it, so it has to be set. If your
-database has no separate pooler, use the same value for both.
+`DIRECT_URL` is only read by `prisma migrate` during the build; the running app
+never touches it. If your database has no separate unpooled connection, leave it
+out — the build falls back to `DATABASE_URL` and says so in the log. (Set it
+when you do have one: migrations through a transaction-mode pooler can fail.)
 
 **Do not set these in Vercel:**
 

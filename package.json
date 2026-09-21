@@ -4,19 +4,19 @@
   "private": true,
   "scripts": {
     "dev": "next dev",
-    "build": "prisma generate && next build",
-    "vercel-build": "prisma generate && prisma migrate deploy && next build",
+    "build": "node scripts/prisma.mjs generate && next build",
+    "vercel-build": "node scripts/prisma.mjs generate && node scripts/prisma.mjs migrate deploy && next build",
     "start": "next start",
     "lint": "eslint . --ext .ts,.tsx --max-warnings 0",
     "typecheck": "tsc --noEmit",
     "test": "tsx --conditions=react-server tests/logic.test.mts",
     "test:jobs": "tsx --conditions=react-server tests/jobs.test.mts",
     "db:migrate": "prisma migrate dev",
-    "db:deploy": "prisma migrate deploy",
+    "db:deploy": "node scripts/prisma.mjs migrate deploy",
     "db:seed": "prisma db seed",
     "db:studio": "prisma studio",
     "vercel:env": "node scripts/vercel-env.mjs",
-    "postinstall": "prisma generate"
+    "postinstall": "node scripts/prisma.mjs generate"
   },
   "prisma": {
     "seed": "tsx --conditions=react-server prisma/seed.ts"
