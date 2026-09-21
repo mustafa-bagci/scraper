@@ -307,17 +307,3 @@ async function processSlice(searchRunId: string, budgetMs: number): Promise<Sear
     },
   });
 }
-
-/** Indicative provider usage for a search, shown before it is run. */
-export function estimateSearchCost(
-  limit: number,
-  costPerBusiness: number,
-  currency: string,
-): { requests: number; cost: string } {
-  const requests = Math.max(1, Math.ceil(limit / 20));
-  const cost = limit * costPerBusiness;
-  return {
-    requests,
-    cost: cost > 0 ? `${cost.toFixed(2)} ${currency}` : 'No provider cost',
-  };
-}

@@ -462,15 +462,6 @@ export function SettingsView({
               max={100000}
               onChange={(value) => setLimits({ ...limits, maxVerificationsPerDay: value })}
             />
-            <NumberField
-              id="cost-business"
-              label="Cost per business"
-              step={0.001}
-              value={limits.estimatedCostPerBusiness}
-              min={0}
-              max={10}
-              onChange={(value) => setLimits({ ...limits, estimatedCostPerBusiness: value })}
-            />
             <div className="space-y-1.5">
               <Label htmlFor="currency">Currency</Label>
               <Input

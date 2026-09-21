@@ -21,7 +21,8 @@
     "db:seed": "prisma db seed",
     "db:studio": "prisma studio",
     "vercel:env": "node scripts/vercel-env.mjs",
-    "postinstall": "node scripts/prisma.mjs generate"
+    "postinstall": "node scripts/prisma.mjs generate",
+    "test:pricing": "tsx --conditions=react-server tests/pricing.test.mts"
   },
   "prisma": {
     "seed": "tsx --conditions=react-server prisma/seed.ts"

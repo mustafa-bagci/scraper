@@ -14,7 +14,18 @@ import {
 import type { RatingBreakdown } from '@/lib/reviews/stats';
 
 const ENDPOINT = 'https://api.dataforseo.com/v3/business_data/business_listings/search/live';
-const PAGE_SIZE = 100;
+/**
+ * Records per request.
+ *
+ * The endpoint accepts up to 1000, and since each request carries a fixed fee
+ * a bigger page is cheaper. The ceiling is not price but time: the search runs
+ * in bounded serverless slices and a page is always processed to completion,
+ * so a page has to fit inside one invocation. A new lead measured ~11ms to
+ * store against a local database and is several times that against a pooled
+ * one over the network, which puts 1000 records uncomfortably close to the
+ * 60s function limit. 200 halves the per-request fee and still leaves room.
+ */
+const PAGE_SIZE = 200;
 
 /**
  * Business data from DataForSEO's Business Listings database.
@@ -40,6 +51,11 @@ export class DataForSEOProvider implements BusinessDataProvider {
     reviewText: false,
     email: false,
     maxResultsPerSearch: 1000,
+    resultsPerRequest: PAGE_SIZE,
+    // Published rates, confirmed against this account: a single record was
+    // billed at $0.01236 and five at $0.01380, which is exactly
+    // 0.012 + n × 0.00036.
+    pricing: { perRequest: 0.012, perResult: 0.00036, currency: 'USD' },
   };
 
   constructor(private readonly credentials: string | null) {}

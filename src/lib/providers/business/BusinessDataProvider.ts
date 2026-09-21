@@ -85,6 +85,22 @@ export type BusinessSearchPage = {
   providerCost?: number;
 };
 
+/**
+ * What a vendor charges, as a two-part tariff.
+ *
+ * Most of these APIs bill a fixed amount for accepting the request plus a
+ * small amount per record returned, which a single "cost per business" figure
+ * cannot express: it over-states a large search by an order of magnitude and
+ * under-states a small one. `null` means the provider costs nothing to call.
+ */
+export type ProviderPricing = {
+  /** Charged once per request, whatever it returns. */
+  perRequest: number;
+  /** Charged for each record the request returns. */
+  perResult: number;
+  currency: string;
+};
+
 export type ProviderCapabilities = {
   /** Can supply a full 1★–5★ distribution. */
   reviewBreakdown: boolean;
@@ -94,6 +110,10 @@ export type ProviderCapabilities = {
   email: boolean;
   /** Approximate maximum records per search. */
   maxResultsPerSearch: number;
+  /** Records this provider is asked for per request — the estimate needs it. */
+  resultsPerRequest: number;
+  /** Published rates, for the pre-search estimate. */
+  pricing: ProviderPricing | null;
 };
 
 export interface BusinessDataProvider {

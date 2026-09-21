@@ -87,6 +87,11 @@ export class GooglePlacesProvider implements BusinessDataProvider {
     reviewText: true,
     email: false,
     maxResultsPerSearch: 60,
+    // Text Search pages 20 at a time.
+    resultsPerRequest: 20,
+    // Billed per request, not per record; the rate depends on the SKU and the
+    // account's monthly credit, so the estimate stays conservative.
+    pricing: { perRequest: 0.032, perResult: 0, currency: 'USD' },
   };
 
   constructor(private readonly apiKey: string | null) {}

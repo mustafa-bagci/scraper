@@ -27,6 +27,9 @@ export class MockBusinessProvider implements BusinessDataProvider {
     reviewText: true,
     email: false,
     maxResultsPerSearch: 500,
+    resultsPerRequest: PAGE_SIZE,
+    // Demo data costs nothing.
+    pricing: null,
   };
 
   isConfigured(): boolean {

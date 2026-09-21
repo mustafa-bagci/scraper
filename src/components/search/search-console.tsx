@@ -8,6 +8,8 @@ import { toast } from 'sonner';
 import { apiFetch, ApiClientError } from '@/lib/api/client';
 import { describeFilters, type LeadFilters } from '@/types/filters';
 import { filtersToSearchParams } from '@/lib/filters/url';
+import { estimateSearchCost } from '@/lib/providers/pricing';
+import type { ProviderPricing } from '@/lib/providers/business/BusinessDataProvider';
 import {
   CATEGORY_SUGGESTIONS,
   COUNTRY_SUGGESTIONS,
@@ -54,8 +56,8 @@ type SearchRunState = {
 export function SearchConsole({
   initialFilters,
   defaults,
-  costPerBusiness,
-  currency,
+  pricing,
+  resultsPerRequest,
   maxResults,
   providerLabel,
   providerConfigured,
@@ -63,8 +65,8 @@ export function SearchConsole({
 }: {
   initialFilters: LeadFilters;
   defaults: { country: string; resultLimit: number };
-  costPerBusiness: number;
-  currency: string;
+  pricing: ProviderPricing | null;
+  resultsPerRequest: number;
   maxResults: number;
   providerLabel: string;
   providerConfigured: boolean;
@@ -173,8 +175,8 @@ export function SearchConsole({
   // Asking for more than the ceiling used to be trimmed without a word, which
   // reads as the provider having run out of businesses.
   const limitCapped = requestedLimit > maxResults;
-  const estimatedRequests = Math.max(1, Math.ceil(limit / 20));
-  const estimatedCost = limit * costPerBusiness;
+  // One shared estimator, so the panel and the server cannot disagree.
+  const estimate = estimateSearchCost(limit, { pricing, resultsPerRequest });
   const resultsHref = `/leads?${filtersToSearchParams(filters).toString()}`;
   const busy = starting || run?.status === 'PENDING' || run?.status === 'RUNNING';
 
@@ -369,12 +371,12 @@ export function SearchConsole({
                 </div>
                 <div className="flex justify-between">
                   <dt className="text-muted-foreground">Requests</dt>
-                  <dd className="tabular font-medium">≈ {formatNumber(estimatedRequests)}</dd>
+                  <dd className="tabular font-medium">≈ {formatNumber(estimate.requests)}</dd>
                 </div>
                 <div className="flex justify-between">
                   <dt className="text-muted-foreground">Cost</dt>
                   <dd className="tabular font-medium">
-                    {estimatedCost > 0 ? `≈ ${estimatedCost.toFixed(2)} ${currency}` : 'No provider cost'}
+                    {pricing ? `≈ ${estimate.cost}` : estimate.cost}
                   </dd>
                 </div>
               </dl>
@@ -396,7 +398,7 @@ export function SearchConsole({
           </CardContent>
         </Card>
 
-        {run ? <RunProgress run={run} resultsHref={resultsHref} onRetry={runSearch} currency={currency} /> : null}
+        {run ? <RunProgress run={run} resultsHref={resultsHref} onRetry={runSearch} currency={pricing?.currency ?? 'USD'} /> : null}
       </aside>
 
       <SaveSearchDialog open={saveOpen} onOpenChange={setSaveOpen} filters={filters} />

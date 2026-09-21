@@ -115,16 +115,15 @@ export const limitSettingsSchema = z.object({
   maxEmailLookupsPerDay: z.number().int().min(1).max(100000).default(500),
   maxVerificationsPerDay: z.number().int().min(1).max(100000).default(500),
   maxSearchesPerDay: z.number().int().min(1).max(10000).default(50),
-  /**
-   * Indicative cost per business record, used only for the pre-search estimate.
-   * Deliberately pessimistic: one DataForSEO record was observed at $0.01236,
-   * and it is not yet known whether that is charged per request or per record.
-   * Over-estimating spend is the safe direction; the run panel shows what the
-   * provider actually charged, which is the figure to correct this with.
-   */
-  estimatedCostPerBusiness: z.number().min(0).max(10).default(0.0124),
   estimatedCostPerEmailLookup: z.number().min(0).max(10).default(0),
-  // DataForSEO bills in US dollars.
+  /**
+   * The provider now reports its own rates, so the search estimate no longer
+   * reads a price from here. A stale figure typed once is worse than none:
+   * this one said $0.0124 per record when the real tariff is $0.012 per
+   * request plus $0.00036 per record, which over-stated a 200-record search
+   * twenty-five-fold. Kept only for the currency of figures the app itself
+   * accumulates.
+   */
   currency: z.string().min(1).max(8).default('USD'),
 });
 export type LimitSettings = z.infer<typeof limitSettingsSchema>;

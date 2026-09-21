@@ -36,8 +36,8 @@ export default async function SearchPage({
             country: settings.general.defaultCountry,
             resultLimit: settings.general.defaultResultLimit,
           }}
-          costPerBusiness={settings.limits.estimatedCostPerBusiness}
-          currency={settings.limits.currency}
+          pricing={provider.capabilities.pricing}
+          resultsPerRequest={provider.capabilities.resultsPerRequest}
           maxResults={Math.min(settings.limits.maxBusinessesPerSearch, provider.capabilities.maxResultsPerSearch)}
           providerLabel={businessStatus?.activeLabel ?? provider.name}
           providerConfigured={businessStatus?.configured ?? provider.isConfigured()}
