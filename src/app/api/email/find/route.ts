@@ -24,6 +24,13 @@ export const POST = withAuth(
     }
 
     const jobId = result.jobId;
+
+    // Every selected lead without a website has already been answered, so a
+    // selection made only of those leaves nothing to run.
+    if (!jobId) {
+      return apiSuccess({ jobId: null, total: 0, noWebsite: result.noWebsite });
+    }
+
     after(async () => {
       try {
         await advanceEmailDiscovery(jobId, INITIAL_TICK_BUDGET_MS);
@@ -32,7 +39,7 @@ export const POST = withAuth(
       }
     });
 
-    return apiSuccess({ jobId, total: result.total }, { status: 202 });
+    return apiSuccess({ jobId, total: result.total, noWebsite: result.noWebsite }, { status: 202 });
   },
   { rateLimit: { key: 'email:find', limit: 30, windowMs: 60_000 } },
 );

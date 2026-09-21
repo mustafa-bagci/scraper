@@ -8,7 +8,7 @@
  */
 import assert from 'node:assert/strict';
 import { JobKind, JobStatus, PrismaClient } from '@prisma/client';
-import { advanceEmailDiscovery } from '../src/server/jobs/email-discovery';
+import { advanceEmailDiscovery, startEmailDiscovery } from '../src/server/jobs/email-discovery';
 
 const prisma = new PrismaClient();
 
@@ -49,6 +49,7 @@ async function makeJob(leadIds: string[]) {
 }
 
 async function cleanup() {
+  await prisma.leadActivity.deleteMany({ where: { lead: { businessName: { startsWith: LABEL } } } });
   await prisma.lead.deleteMany({ where: { businessName: { startsWith: LABEL } } });
   await prisma.job.deleteMany({ where: { kind: JobKind.EMAIL_DISCOVERY, total: { lte: 4 } } });
 }
@@ -112,6 +113,67 @@ await t('a finished job is left alone', async () => {
   const after = await advanceEmailDiscovery(job.id, 30_000);
   assert.equal(after?.cursor, before.cursor);
   assert.deepEqual(after?.finishedAt, before.finishedAt);
+});
+
+await t('a lead with no website is answered rather than quietly dropped', async () => {
+  const withSite = await prisma.lead.create({
+    data: {
+      businessName: `${LABEL} has-site`,
+      website: 'https://lead-site.example',
+      websiteDomain: 'lead-site.example',
+      dedupeKey: `${LABEL}-has-site-${Date.now()}`,
+    },
+  });
+  const withoutSite = await prisma.lead.create({
+    data: { businessName: `${LABEL} no-site`, dedupeKey: `${LABEL}-no-site-${Date.now()}` },
+  });
+
+  const started = await startEmailDiscovery([withSite.id, withoutSite.id], { userId: null, verify: false });
+  assert.ok(started.ok);
+  assert.equal(started.total, 1, 'only the crawlable lead costs a lookup');
+  assert.equal(started.noWebsite, 1, 'and the other is reported, not hidden');
+
+  const stamped = await prisma.lead.findUniqueOrThrow({ where: { id: withoutSite.id } });
+  assert.equal(stamped.emailStatus, 'NOT_FOUND', 'the list must not still read "not checked"');
+  assert.equal(stamped.websiteStatus, 'NO_WEBSITE', 'and the reason is kept');
+  assert.ok(stamped.emailCheckedAt, 'it counts as checked');
+
+  const why = await prisma.leadActivity.findFirst({
+    where: { leadId: withoutSite.id, type: 'EMAIL_NOT_FOUND' },
+  });
+  assert.ok(why, 'the lead page can say why nothing was found');
+});
+
+await t('a selection with no crawlable lead still answers every lead', async () => {
+  const lead = await prisma.lead.create({
+    data: { businessName: `${LABEL} only-no-site`, dedupeKey: `${LABEL}-only-${Date.now()}` },
+  });
+
+  const started = await startEmailDiscovery([lead.id], { userId: null, verify: false });
+  assert.ok(started.ok, 'an all-no-website selection is a result, not an error');
+  assert.equal(started.jobId, null, 'there is nothing to crawl');
+  assert.equal(started.noWebsite, 1);
+
+  const stamped = await prisma.lead.findUniqueOrThrow({ where: { id: lead.id } });
+  assert.equal(stamped.emailStatus, 'NOT_FOUND');
+});
+
+await t('a crawl that throws still leaves a visible result', async () => {
+  const lead = await prisma.lead.create({
+    data: {
+      businessName: `${LABEL} broken`,
+      // An address the crawler cannot make sense of, so the lookup throws.
+      website: 'http://',
+      websiteDomain: null,
+      dedupeKey: `${LABEL}-broken-${Date.now()}`,
+    },
+  });
+  const job = await makeJob([lead.id]);
+  while ((await advanceEmailDiscovery(job.id, 30_000))!.status !== JobStatus.COMPLETED) { /* drain */ }
+
+  const stamped = await prisma.lead.findUniqueOrThrow({ where: { id: lead.id } });
+  assert.notEqual(stamped.emailStatus, 'UNKNOWN', 'a failed crawl is still an answer in the list');
+  assert.ok(stamped.emailCheckedAt);
 });
 
 await cleanup();

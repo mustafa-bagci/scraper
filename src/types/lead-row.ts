@@ -1,4 +1,4 @@
-import type { EmailStatus, Lead, LeadStatus } from '@prisma/client';
+import type { EmailStatus, Lead, LeadStatus, WebsiteStatus } from '@prisma/client';
 
 /** The exact lead shape the table needs — keeps the RSC payload small. */
 export type LeadRow = {
@@ -22,6 +22,7 @@ export type LeadRow = {
   email: string | null;
   emailStatus: EmailStatus;
   emailSource: string | null;
+  websiteStatus: WebsiteStatus;
   leadScore: number;
   status: LeadStatus;
   createdAt: string;
@@ -49,6 +50,7 @@ export function toLeadRow(lead: Lead): LeadRow {
     email: lead.email,
     emailStatus: lead.emailStatus,
     emailSource: lead.emailSource,
+    websiteStatus: lead.websiteStatus,
     leadScore: lead.leadScore,
     status: lead.status,
     createdAt: lead.createdAt.toISOString(),

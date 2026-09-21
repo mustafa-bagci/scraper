@@ -25,8 +25,40 @@ export const INITIAL_TICK_BUDGET_MS = 50_000;
 export const POLL_TICK_BUDGET_MS = 20_000;
 
 export type StartEmailJobResult =
-  | { ok: true; jobId: string; total: number }
+  /** `jobId` is null when nothing was left to crawl — see `noWebsite`. */
+  | { ok: true; jobId: string | null; total: number; noWebsite: number }
   | { ok: false; error: string; code: 'QUOTA' | 'EMPTY' };
+
+/**
+ * Records the outcome for leads that cannot be crawled at all.
+ *
+ * They used to be dropped from the selection without a word, which left them
+ * looking exactly like a lead nobody had checked yet. There is no public page
+ * to read, so the answer is already known: no public email. No crawl happens,
+ * so none of these costs a lookup against the daily quota.
+ */
+async function markLeadsWithoutWebsite(leadIds: string[], userId: string | null): Promise<void> {
+  if (leadIds.length === 0) return;
+
+  await prisma.lead.updateMany({
+    where: { id: { in: leadIds } },
+    data: {
+      emailStatus: EmailStatus.NOT_FOUND,
+      emailCheckedAt: new Date(),
+      websiteStatus: WebsiteStatus.NO_WEBSITE,
+      websiteCheckedAt: new Date(),
+    },
+  });
+
+  await prisma.leadActivity.createMany({
+    data: leadIds.map((leadId) => ({
+      leadId,
+      userId,
+      type: ActivityType.EMAIL_NOT_FOUND,
+      message: 'No website on record, so there is no public page to read an address from.',
+    })),
+  });
+}
 
 export async function startEmailDiscovery(
   leadIds: string[],
@@ -34,13 +66,26 @@ export async function startEmailDiscovery(
 ): Promise<StartEmailJobResult> {
   const settings = await getSettings();
 
-  const targets = await prisma.lead.findMany({
-    where: { id: { in: leadIds }, website: { not: null } },
-    select: { id: true },
+  const selected = await prisma.lead.findMany({
+    where: { id: { in: leadIds } },
+    select: { id: true, website: true },
   });
 
+  if (selected.length === 0) {
+    return { ok: false, code: 'EMPTY', error: 'None of the selected leads could be found.' };
+  }
+
+  const targets = selected.filter((lead) => lead.website);
+  const withoutWebsite = selected.filter((lead) => !lead.website);
+
+  await markLeadsWithoutWebsite(
+    withoutWebsite.map((lead) => lead.id),
+    options.userId,
+  );
+
+  // Nothing to crawl, but the selection was still answered in full.
   if (targets.length === 0) {
-    return { ok: false, code: 'EMPTY', error: 'None of the selected leads has a website to check.' };
+    return { ok: true, jobId: null, total: 0, noWebsite: withoutWebsite.length };
   }
 
   const quota = await consumeDailyQuota('email:lookups', settings.limits.maxEmailLookupsPerDay, targets.length);
@@ -63,7 +108,7 @@ export async function startEmailDiscovery(
     },
   });
 
-  return { ok: true, jobId: job.id, total: targets.length };
+  return { ok: true, jobId: job.id, total: targets.length, noWebsite: withoutWebsite.length };
 }
 
 /**
@@ -215,12 +260,24 @@ async function processEmailSlice(jobId: string, budgetMs: number): Promise<Job> 
     } catch (error) {
       console.error('[email-discovery] lead failed', { leadId, error });
       failed += 1;
+      // Stamp the lead even though the crawl broke. Without this the lead sat
+      // at UNKNOWN and was indistinguishable in the list from one that had
+      // never been looked at; the activity below carries the real reason.
+      await prisma.lead.update({
+        where: { id: leadId },
+        data: {
+          emailStatus: EmailStatus.NOT_FOUND,
+          emailCheckedAt: new Date(),
+          websiteStatus: WebsiteStatus.UNREACHABLE,
+          websiteCheckedAt: new Date(),
+        },
+      });
       await prisma.leadActivity.create({
         data: {
           leadId,
           userId: job.userId,
           type: ActivityType.EMAIL_NOT_FOUND,
-          message: 'Email discovery failed for this lead. See server logs for details.',
+          message: 'The website could not be read, so no public address was found.',
         },
       });
     }

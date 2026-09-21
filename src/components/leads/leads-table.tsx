@@ -214,10 +214,27 @@ export function LeadsTable({
   const findEmails = async () => {
     setPending(true);
     try {
-      const { jobId, total: jobTotal } = await apiFetch<{ jobId: string; total: number }>('/api/email/find', {
+      const { jobId, total: jobTotal, noWebsite } = await apiFetch<{
+        jobId: string | null;
+        total: number;
+        noWebsite: number;
+      }>('/api/email/find', {
         method: 'POST',
         body: { leadIds: selectedIds, verify: true },
       });
+
+      // A lead with no website has no public page to read, so it is answered
+      // without a crawl. Say so rather than letting it look unchecked.
+      const noWebsiteNote =
+        noWebsite > 0 ? ` · ${formatNumber(noWebsite)} with no website marked not found` : '';
+
+      if (!jobId) {
+        toast.success('Email discovery complete', {
+          description: `Nothing to crawl${noWebsiteNote || ' — the selected leads have no website'}`,
+        });
+        router.refresh();
+        return;
+      }
 
       setEmailJob({ id: jobId, total: jobTotal, processed: 0, succeeded: 0, failed: 0, status: 'RUNNING' });
 
@@ -229,7 +246,7 @@ export function LeadsTable({
           if (state.status === 'COMPLETED' || state.status === 'FAILED') {
             stopPolling();
             toast.success('Email discovery complete', {
-              description: `Found ${formatNumber(state.succeeded)} · not found ${formatNumber(state.failed)}`,
+              description: `Found ${formatNumber(state.succeeded)} · not found ${formatNumber(state.failed)}${noWebsiteNote}`,
             });
             router.refresh();
             setTimeout(() => setEmailJob(null), 4000);
@@ -584,7 +601,9 @@ function LeadCell({ column, row }: { column: ColumnId; row: LeadRow }) {
         // Nobody has looked yet — different from having looked and found none.
         <span className="text-muted-foreground">—</span>
       ) : (
-        <EmailStatusBadge status={row.emailStatus} />
+        <span title={noEmailReason(row)}>
+          <EmailStatusBadge status={row.emailStatus} />
+        </span>
       );
     case 'score':
       return <ScorePill score={row.leadScore} />;
@@ -592,5 +611,19 @@ function LeadCell({ column, row }: { column: ColumnId; row: LeadRow }) {
       return <LeadStatusBadge status={row.status} />;
     default:
       return null;
+  }
+}
+
+/** Why a checked lead has no address — the badge alone cannot say. */
+function noEmailReason(row: LeadRow): string {
+  switch (row.websiteStatus) {
+    case 'NO_WEBSITE':
+      return 'No website on record, so there is no public page to read an address from.';
+    case 'UNREACHABLE':
+      return 'The website could not be reached, so no public address was found.';
+    case 'BLOCKED':
+      return 'The website asks crawlers not to read these pages, so it was left alone.';
+    default:
+      return 'The website was read and publishes no contact address.';
   }
 }
