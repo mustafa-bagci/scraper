@@ -200,6 +200,7 @@ Two rules hold throughout:
 | `GET` `POST` | `/api/saved-searches` | List / create saved searches. |
 | `PATCH` `DELETE` | `/api/saved-searches/:id` | Rename, re-filter, delete. |
 | `GET` | `/api/health` | Unauthenticated liveness probe. |
+| `GET` | `/api/diagnostics` | Authenticated self-check: names the failing dependency. |
 
 Every request body, query and settings write is validated with Zod, and every
 response uses the same `{ ok, data | error }` envelope.
@@ -608,6 +609,14 @@ SEED_DEMO_DATA=false npx prisma db seed
 
 `https://<your-app>.vercel.app/api/health` should return
 `{"ok":true,"database":"up"}`. Then sign in and run one small search.
+
+If a page fails with "Something went wrong", open
+`https://<your-app>.vercel.app/api/diagnostics` while signed in. It runs each
+thing the pages depend on — the connection, the grouped and raw dashboard
+queries, settings, provider resolution, environment validation — and names the
+one that breaks, with the database's own error message. It reports only which
+check failed; connection strings, API keys and environment values are never
+included.
 
 ### Background jobs on serverless
 
