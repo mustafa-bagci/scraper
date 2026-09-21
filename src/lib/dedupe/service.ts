@@ -7,7 +7,14 @@ import { prisma } from '@/lib/db/prisma';
  * Priority order:
  *   1. `provider` + `externalId` — authoritative when the source supplies one.
  *   2. A deterministic `dedupeKey` built from normalised name + address + phone.
- *   3. A looser normalised-name + normalised-phone probe.
+ *   3. Normalised name + normalised phone.
+ *   4. Phone + locality, for the same business listed under a slightly
+ *      different name ("… - Lyon 1", "Dr X —" prefixes, a branch suffix).
+ *   5. Website domain + postal code, for a listing with no phone.
+ *
+ * Rules 4 and 5 both pair a strong identifier with a locality check. Phone or
+ * domain alone would merge the separate branches of a chain, which are
+ * genuinely different prospects with different review profiles.
  */
 
 export type DedupeInput = {
@@ -94,7 +101,10 @@ export function buildDedupeKeys(input: DedupeInput): DedupeKeys {
   };
 }
 
-export type DuplicateMatch = { id: string; reason: 'externalId' | 'dedupeKey' | 'namePhone' };
+export type DuplicateMatch = {
+  id: string;
+  reason: 'externalId' | 'dedupeKey' | 'namePhone' | 'phoneLocality' | 'domainLocality';
+};
 
 /** Looks for an existing lead that represents the same business. */
 export async function findDuplicate(input: DedupeInput): Promise<DuplicateMatch | null> {
@@ -117,6 +127,32 @@ export async function findDuplicate(input: DedupeInput): Promise<DuplicateMatch 
       select: { id: true },
     });
     if (byNamePhone) return { id: byNamePhone.id, reason: 'namePhone' };
+  }
+
+  const postalCode = input.postalCode?.trim() || null;
+  const city = input.city?.trim() || null;
+
+  // Same phone in the same place is the same business, whatever it calls
+  // itself. Different branches have different numbers.
+  if (keys.normalizedPhone && (postalCode || city)) {
+    const byPhone = await prisma.lead.findFirst({
+      where: {
+        normalizedPhone: keys.normalizedPhone,
+        ...(postalCode ? { postalCode } : { city }),
+      },
+      select: { id: true },
+    });
+    if (byPhone) return { id: byPhone.id, reason: 'phoneLocality' };
+  }
+
+  // A listing with no phone still gives itself away by sharing a website with
+  // another listing at the same postcode.
+  if (keys.websiteDomain && postalCode) {
+    const byDomain = await prisma.lead.findFirst({
+      where: { websiteDomain: keys.websiteDomain, postalCode },
+      select: { id: true },
+    });
+    if (byDomain) return { id: byDomain.id, reason: 'domainLocality' };
   }
 
   return null;

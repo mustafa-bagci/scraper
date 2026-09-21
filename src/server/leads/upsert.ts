@@ -106,12 +106,18 @@ export async function upsertBusinessAsLead(
   });
 
   if (duplicate) {
-    // Refresh the review/score signals but never clobber the operator's own
-    // work: status, notes and a discovered email stay as they are.
+    const existing = await prisma.lead.findUniqueOrThrow({ where: { id: duplicate.id } });
+
+    // Refresh the review and score signals — that is the point of seeing the
+    // business again — but never trade known contact details for blanks. A
+    // sparser duplicate listing must fill gaps, not erase what we already
+    // have, and the operator's own work (status, notes, a discovered email)
+    // stays untouched.
     const lead = await prisma.lead.update({
       where: { id: duplicate.id },
       data: {
         ...data,
+        ...keepBest(existing, data),
         email: undefined,
         emailStatus: undefined,
         searchRunId: context.searchRunId ?? undefined,
@@ -149,6 +155,45 @@ export async function upsertBusinessAsLead(
   });
 
   return { lead, created: true, duplicateOf: null };
+}
+
+/**
+ * Fields a re-sighting may fill in but must not blank out.
+ *
+ * Provider listings vary in completeness: the same business can come back
+ * without the phone number it had last time. Losing a phone matters — it is
+ * the fallback when no email is published.
+ */
+const PRESERVED_FIELDS = [
+  'phone',
+  'website',
+  'websiteDomain',
+  'address',
+  'postalCode',
+  'city',
+  'region',
+  'country',
+  'countryCode',
+  'latitude',
+  'longitude',
+  'category',
+  'sourceUrl',
+  'externalId',
+] as const;
+
+function keepBest(existing: Lead, incoming: Prisma.LeadUncheckedUpdateInput): Prisma.LeadUncheckedUpdateInput {
+  const kept: Record<string, unknown> = {};
+
+  for (const field of PRESERVED_FIELDS) {
+    const next = incoming[field];
+    const current = existing[field];
+    const nextIsBlank = next === null || next === undefined || next === '';
+    const currentIsBlank = current === null || current === undefined || current === '';
+
+    if (nextIsBlank && !currentIsBlank) kept[field] = current;
+  }
+
+  return kept as Prisma.LeadUncheckedUpdateInput;
 }
 
 async function replaceReviews(

@@ -146,6 +146,12 @@ async function processSlice(searchRunId: string, budgetMs: number): Promise<Sear
   let providerCost = run.providerCost;
   let cursor = run.cursor;
 
+  // Providers page by offset over a sorted set, so a tie in the sort key can
+  // hand back a record that an earlier page already carried. The database
+  // would collapse it anyway; skipping it here saves the round trip and keeps
+  // the counters honest.
+  const seenExternalIds = new Set<string>();
+
   const deadline = Date.now() + budgetMs;
   let exhausted = false;
   // Every tick processes at least one page. Without this a tick whose budget
@@ -188,6 +194,15 @@ async function processSlice(searchRunId: string, budgetMs: number): Promise<Sear
     for (const business of page.businesses) {
       if (discovered >= limit) break;
       discovered += 1;
+
+      // A tie in the provider's sort order can hand back a record an earlier
+      // page already carried. The database would collapse it anyway; skipping
+      // it here saves the round trip and keeps the counters honest.
+      if (business.externalId && seenExternalIds.has(business.externalId)) {
+        duplicates += 1;
+        continue;
+      }
+      if (business.externalId) seenExternalIds.add(business.externalId);
 
       const stats = computeReviewStats(business.ratingBreakdown, business.reviewCount, settings.reviews);
       const score = scoreLead(

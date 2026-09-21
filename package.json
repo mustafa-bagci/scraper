@@ -14,6 +14,7 @@
     "test:dataforseo": "tsx --conditions=react-server tests/dataforseo.test.mts",
     "test:jobs": "tsx --conditions=react-server tests/jobs.test.mts",
     "test:email-job": "tsx --conditions=react-server tests/email-job.test.mts",
+    "test:dedupe": "tsx --conditions=react-server tests/dedupe.test.mts",
     "test:bootstrap": "tsx --conditions=react-server tests/bootstrap.test.mts",
     "db:migrate": "prisma migrate dev",
     "db:deploy": "node scripts/prisma.mjs migrate deploy",
