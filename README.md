@@ -529,7 +529,16 @@ DIRECT_URL     postgres://…/db?sslmode=require           # direct, no pooler
 AUTH_SECRET    <openssl rand -base64 48>
 ```
 
-Set them for **Production** (and Preview, if you use it).
+Set them for **Production** (and Preview, if you use it). Vercel's
+**Import .env** box takes a file — generate one, filled in, with:
+
+```bash
+npm run vercel:env -- "<your Neon connection string>"
+```
+
+That writes `vercel.env` (git-ignored): it works out whether you pasted the
+pooled or the direct URL, derives the other, and generates `AUTH_SECRET`.
+`deploy/vercel.env.template` is the same file to fill in by hand.
 
 `AUTH_SECRET` signs session cookies **and** derives the key that encrypts
 provider API keys at rest. Rotating it logs everyone out and makes stored keys

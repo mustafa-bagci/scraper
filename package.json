@@ -15,6 +15,7 @@
     "db:deploy": "prisma migrate deploy",
     "db:seed": "prisma db seed",
     "db:studio": "prisma studio",
+    "vercel:env": "node scripts/vercel-env.mjs",
     "postinstall": "prisma generate"
   },
   "prisma": {
