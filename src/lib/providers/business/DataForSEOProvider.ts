@@ -229,11 +229,16 @@ export function toCountryCode(value: string | undefined): string | undefined {
 
 type Filter = [string, string, string | number];
 
+/** DataForSEO accepts at most eight conditions in one filter expression. */
+const MAX_FILTERS = 8;
+
 /**
  * Builds one DataForSEO task.
  *
- * Location and rating constraints are pushed to the API so the operator is not
- * billed for records the filter engine would discard locally.
+ * Location **and review** constraints are pushed to the API. That second part
+ * is what keeps a search affordable: every record returned is billed, so a
+ * rating ceiling applied locally means paying for businesses the filter engine
+ * is about to discard. Pushing it down means paying only for candidates.
  */
 export function buildTask(params: BusinessSearchParams, offset: number, limit: number): Record<string, unknown> {
   const filters: Filter[] = [];
@@ -244,6 +249,12 @@ export function buildTask(params: BusinessSearchParams, offset: number, limit: n
   if (params.region) filters.push(['address_info.region', '=', params.region.trim()]);
   if (params.postalCode) filters.push(['address_info.zip', 'like', `${params.postalCode.trim()}%`]);
 
+  // Review constraints, in the order that removes the most billable records.
+  if (params.ratingMax !== undefined) filters.push(['rating.value', '<=', params.ratingMax]);
+  if (params.reviewCountMin !== undefined) filters.push(['rating.votes_count', '>=', params.reviewCountMin]);
+  if (params.ratingMin !== undefined) filters.push(['rating.value', '>=', params.ratingMin]);
+  if (params.reviewCountMax !== undefined) filters.push(['rating.votes_count', '<=', params.reviewCountMax]);
+
   const task: Record<string, unknown> = { limit, offset };
 
   // DataForSEO matches categories against its own taxonomy, so a free-text
@@ -251,7 +262,7 @@ export function buildTask(params: BusinessSearchParams, offset: number, limit: n
   if (params.category) task.categories = [normaliseCategory(params.category)];
   if (params.keyword) task.title = params.keyword.trim();
 
-  if (filters.length > 0) task.filters = joinFilters(filters);
+  if (filters.length > 0) task.filters = joinFilters(filters.slice(0, MAX_FILTERS));
   task.order_by = ['rating.votes_count,desc'];
 
   return task;

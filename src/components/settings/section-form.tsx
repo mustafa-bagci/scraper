@@ -2,7 +2,7 @@
 
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { Save } from 'lucide-react';
+import { RotateCcw, Save } from 'lucide-react';
 import { toast } from 'sonner';
 import { apiFetch, ApiClientError } from '@/lib/api/client';
 import { Button } from '@/components/ui/button';
@@ -32,6 +32,7 @@ export function SectionForm<T>({
 }) {
   const router = useRouter();
   const [saving, setSaving] = useState(false);
+  const [resetting, setResetting] = useState(false);
 
   const save = async () => {
     setSaving(true);
@@ -51,6 +52,25 @@ export function SectionForm<T>({
     }
   };
 
+  const reset = async () => {
+    setResetting(true);
+    try {
+      const result = await apiFetch<{ recomputed: number }>('/api/settings', {
+        method: 'PATCH',
+        body: { section, reset: true },
+      });
+      toast.success('Restored to the defaults that ship with this build', {
+        description: result.recomputed > 0 ? `${result.recomputed} leads re-scored.` : undefined,
+      });
+      // The form holds its values in local state, so a refresh alone would keep
+      // showing the old ones.
+      window.location.reload();
+    } catch (error) {
+      toast.error(error instanceof ApiClientError ? error.message : 'The settings could not be reset.');
+      setResetting(false);
+    }
+  };
+
   return (
     <Card>
       <CardHeader>
@@ -58,12 +78,18 @@ export function SectionForm<T>({
         <CardDescription>{description}</CardDescription>
       </CardHeader>
       <CardContent>{children}</CardContent>
-      <CardFooter className="justify-between">
+      <CardFooter className="flex-wrap justify-between gap-2">
         <p className="text-2xs text-muted-foreground">{footerNote}</p>
-        <Button size="sm" onClick={save} loading={saving}>
-          <Save />
-          Save changes
-        </Button>
+        <div className="flex items-center gap-2">
+          <Button size="sm" variant="ghost" onClick={reset} loading={resetting}>
+            <RotateCcw />
+            Reset to defaults
+          </Button>
+          <Button size="sm" onClick={save} loading={saving}>
+            <Save />
+            Save changes
+          </Button>
+        </div>
       </CardFooter>
     </Card>
   );

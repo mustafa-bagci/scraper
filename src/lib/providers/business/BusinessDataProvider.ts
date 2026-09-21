@@ -56,6 +56,18 @@ export type BusinessSearchParams = {
   category?: string;
   keyword?: string;
   openNow?: boolean;
+
+  /**
+   * Review constraints, passed down so a provider that can filter server-side
+   * does. Every record a provider returns is usually billed, so discarding
+   * them locally means paying for them first. A provider that cannot apply
+   * these may ignore them — the filter engine still enforces them.
+   */
+  ratingMin?: number;
+  ratingMax?: number;
+  reviewCountMin?: number;
+  reviewCountMax?: number;
+
   /**
    * Hard ceiling on records for the **whole search**, not for one page, and
    * the same on every call. Paging position comes from the page token, so an

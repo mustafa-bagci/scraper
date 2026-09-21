@@ -99,16 +99,43 @@ await t('Reviews: missing breakdown is never invented', () => {
   assert.equal(s.reviewCount, 247);
 });
 
-await t('Scoring: worked example from the spec', () => {
+await t('Scoring: a clearly hurting business scores high', () => {
   const r = scoreLead(
     { rating: 3.8, reviewCount: 247, badReviewCount: 31, badReviewPercentage: 12.55,
       email: 'contact@x.fr', website: 'https://x.fr', phone: '+33 1' },
     DEFAULT_SCORING,
   );
-  // rating<=4 (25) + reviews>=100 (20) + bad%>=10 (20) + email (10) + website (5) + phone (5)
+  // rating≤4.2 (15) + ≤3.9 (15) + 30+ reviews (10) + 150+ (10)
+  // + bad%≥10 (15) + email (10) + website (5) + phone (5)
   assert.equal(r.score, 85);
-  assert.equal(r.matched.length, 6);
+  assert.ok(r.score >= DEFAULT_SCORING.qualifiedThreshold, 'must qualify');
   assert.ok(r.contributions.every((c) => typeof c.detail === 'string' && c.detail.length > 0));
+});
+
+await t('Scoring: a well-rated business does not qualify, however many reviews', () => {
+  // The operator's own rule: a 4.4 is not a prospect. It is worth something —
+  // 13% of its customers are angry — but not enough to work.
+  const r = scoreLead(
+    { rating: 4.4, reviewCount: 1305, badReviewCount: 172, badReviewPercentage: 13.18,
+      email: null, website: 'https://x.fr', phone: '+33 4' },
+    DEFAULT_SCORING,
+  );
+  assert.equal(r.score, 45);
+  assert.ok(r.score < DEFAULT_SCORING.qualifiedThreshold, 'must not qualify');
+  assert.ok(!r.matched.some((c) => c.ruleId.startsWith('rating-')), 'no rating rule may fire above 4.2');
+});
+
+await t('Scoring: rating steps compound as the damage gets worse', () => {
+  const at = (rating: number) =>
+    scoreLead(
+      { rating, reviewCount: 200, badReviewCount: 40, badReviewPercentage: 20,
+        email: 'a@b.fr', website: 'https://b.fr', phone: '1' },
+      DEFAULT_SCORING,
+    ).score;
+
+  assert.ok(at(3.4) > at(3.7), 'a 3.4 must outrank a 3.7');
+  assert.ok(at(3.7) > at(4.1), 'a 3.7 must outrank a 4.1');
+  assert.ok(at(4.1) > at(4.5), 'a 4.1 must outrank a 4.5');
 });
 
 await t('Scoring: caps at maxScore and explains every rule', () => {

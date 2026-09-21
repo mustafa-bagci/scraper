@@ -164,6 +164,12 @@ async function processSlice(searchRunId: string, budgetMs: number): Promise<Sear
         category: filters.category,
         keyword: filters.keyword,
         openNow: filters.openNow,
+        // Pushed down so the provider is not asked for records this search is
+        // about to throw away; the filter engine still enforces them locally.
+        ratingMin: filters.rating?.min,
+        ratingMax: filters.rating?.max,
+        reviewCountMin: filters.reviewCount?.min,
+        reviewCountMax: filters.reviewCount?.max,
         // The ceiling for the whole search. Position comes from `cursor`, so
         // sending the remaining count here would truncate the final page.
         limit,

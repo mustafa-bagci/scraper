@@ -39,15 +39,35 @@ export const scoringSettingsSchema = z.object({
 });
 export type ScoringSettings = z.infer<typeof scoringSettingsSchema>;
 
+/**
+ * Tuned for Murgay's pitch, which only lands on a business that *feels* a
+ * reputation problem.
+ *
+ * Rating carries the most weight because it is what an owner sees, and it
+ * steps three times: a 3.4 scores the full 45 while a 4.3 scores nothing. Bad
+ * review percentage is the second signal — it catches the business whose
+ * average still looks respectable while hundreds of customers are angry.
+ * Volume separates a real business from a shop with four reviews, and
+ * contactability decides whether the lead is workable at all.
+ */
 export const DEFAULT_SCORING: ScoringSettings = {
   maxScore: 100,
   qualifiedThreshold: 60,
   rules: [
-    { id: 'rating-40', label: 'Rating ≤ 4.0', metric: 'rating', operator: 'lte', value: 4.0, points: 25, enabled: true },
-    { id: 'rating-37', label: 'Rating ≤ 3.7', metric: 'rating', operator: 'lte', value: 3.7, points: 15, enabled: true },
-    { id: 'reviews-100', label: 'Review count ≥ 100', metric: 'reviewCount', operator: 'gte', value: 100, points: 20, enabled: true },
-    { id: 'reviews-300', label: 'Review count ≥ 300', metric: 'reviewCount', operator: 'gte', value: 300, points: 10, enabled: true },
-    { id: 'bad-pct-10', label: 'Bad review percentage ≥ 10%', metric: 'badReviewPercentage', operator: 'gte', value: 10, points: 20, enabled: true },
+    // Visible reputation damage — the reason the prospect picks up the phone.
+    { id: 'rating-42', label: 'Rating ≤ 4.2', metric: 'rating', operator: 'lte', value: 4.2, points: 15, enabled: true },
+    { id: 'rating-39', label: 'Rating ≤ 3.9', metric: 'rating', operator: 'lte', value: 3.9, points: 15, enabled: true },
+    { id: 'rating-35', label: 'Rating ≤ 3.5', metric: 'rating', operator: 'lte', value: 3.5, points: 15, enabled: true },
+
+    // Enough reviews that the rating means something and the owner has revenue.
+    { id: 'reviews-30', label: 'At least 30 reviews', metric: 'reviewCount', operator: 'gte', value: 30, points: 10, enabled: true },
+    { id: 'reviews-150', label: 'At least 150 reviews', metric: 'reviewCount', operator: 'gte', value: 150, points: 10, enabled: true },
+
+    // Catches the business whose average hides a large body of angry customers.
+    { id: 'bad-pct-10', label: 'Bad reviews ≥ 10%', metric: 'badReviewPercentage', operator: 'gte', value: 10, points: 15, enabled: true },
+    { id: 'bad-pct-20', label: 'Bad reviews ≥ 20%', metric: 'badReviewPercentage', operator: 'gte', value: 20, points: 10, enabled: true },
+
+    // Workability.
     { id: 'has-email', label: 'Public email available', metric: 'hasEmail', operator: 'isTrue', points: 10, enabled: true },
     { id: 'has-website', label: 'Website available', metric: 'hasWebsite', operator: 'isTrue', points: 5, enabled: true },
     { id: 'has-phone', label: 'Phone available', metric: 'hasPhone', operator: 'isTrue', points: 5, enabled: true },
@@ -88,14 +108,21 @@ export const DEFAULT_CRAWLER_SETTINGS: CrawlerSettings = crawlerSettingsSchema.p
 // --- Cost control -----------------------------------------------------------
 
 export const limitSettingsSchema = z.object({
-  maxBusinessesPerSearch: z.number().int().min(1).max(1000).default(500),
-  maxEmailLookupsPerDay: z.number().int().min(1).max(100000).default(500),
-  maxVerificationsPerDay: z.number().int().min(1).max(100000).default(500),
-  maxSearchesPerDay: z.number().int().min(1).max(10000).default(100),
-  /** Indicative provider cost per 1 business record, operator-supplied. */
-  estimatedCostPerBusiness: z.number().min(0).max(10).default(0.004),
+  maxBusinessesPerSearch: z.number().int().min(1).max(1000).default(100),
+  maxEmailLookupsPerDay: z.number().int().min(1).max(100000).default(200),
+  maxVerificationsPerDay: z.number().int().min(1).max(100000).default(200),
+  maxSearchesPerDay: z.number().int().min(1).max(10000).default(20),
+  /**
+   * Indicative cost per business record, used only for the pre-search estimate.
+   * Deliberately pessimistic: one DataForSEO record was observed at $0.01236,
+   * and it is not yet known whether that is charged per request or per record.
+   * Over-estimating spend is the safe direction; the run panel shows what the
+   * provider actually charged, which is the figure to correct this with.
+   */
+  estimatedCostPerBusiness: z.number().min(0).max(10).default(0.0124),
   estimatedCostPerEmailLookup: z.number().min(0).max(10).default(0),
-  currency: z.string().min(1).max(8).default('EUR'),
+  // DataForSEO bills in US dollars.
+  currency: z.string().min(1).max(8).default('USD'),
 });
 export type LimitSettings = z.infer<typeof limitSettingsSchema>;
 
@@ -106,7 +133,7 @@ export const DEFAULT_LIMITS: LimitSettings = limitSettingsSchema.parse({});
 export const generalSettingsSchema = z.object({
   organisationName: z.string().min(1).max(120).default('Murgay'),
   defaultCountry: z.string().max(120).default('France'),
-  defaultResultLimit: z.number().int().min(1).max(1000).default(100),
+  defaultResultLimit: z.number().int().min(1).max(1000).default(50),
   timezone: z.string().max(64).default('Europe/Paris'),
 });
 export type GeneralSettings = z.infer<typeof generalSettingsSchema>;

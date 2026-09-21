@@ -93,6 +93,33 @@ await t('location constraints are pushed to the API, separated by "and"', () => 
   assert.equal(task.offset, 0);
 });
 
+await t('review constraints are pushed down so discards are never billed', () => {
+  const task = buildTask(
+    { country: 'France', city: 'Lyon', category: 'dentist', ratingMax: 4.2, reviewCountMin: 30, limit: 50 },
+    0,
+    50,
+  );
+  const encoded = JSON.stringify(task.filters);
+
+  assert.ok(encoded.includes('["rating.value","<=",4.2]'), 'the rating ceiling must reach the API');
+  assert.ok(encoded.includes('["rating.votes_count",">=",30]'), 'the review floor must reach the API');
+});
+
+await t('no more than eight conditions are sent', () => {
+  const task = buildTask(
+    {
+      country: 'France', city: 'Lyon', region: 'ARA', postalCode: '690',
+      ratingMin: 1, ratingMax: 4.2, reviewCountMin: 30, reviewCountMax: 5000,
+      category: 'dentist', limit: 50,
+    },
+    0,
+    50,
+  );
+  // Conditions and their "and" separators interleave, so eight conditions is
+  // fifteen entries. DataForSEO rejects anything longer.
+  assert.ok((task.filters as unknown[]).length <= 15, 'the expression must stay within the provider limit');
+});
+
 await t('a free-text keyword searches the title, not the taxonomy', () => {
   const task = buildTask({ keyword: 'cabinet urgence', limit: 50 }, 0, 50);
   assert.equal(task.title, 'cabinet urgence');

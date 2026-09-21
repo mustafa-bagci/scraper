@@ -288,16 +288,26 @@ lead page says:
 
 Rules are data, stored in settings, and fully editable in the UI:
 
-| Rule | Points |
-|---|---|
-| Rating ≤ 4.0 | +25 |
-| Rating ≤ 3.7 | +15 |
-| Review count ≥ 100 | +20 |
-| Review count ≥ 300 | +10 |
-| Bad review percentage ≥ 10% | +20 |
-| Public email available | +10 |
-| Website available | +5 |
-| Phone available | +5 |
+The shipped rules are tuned for a pitch that only lands on a business which
+*feels* a reputation problem — an owner looking at 4.4 does not think they have
+one, an owner looking at 3.6 thinks about it daily.
+
+| Rule | Points | Why |
+|---|---|---|
+| Rating ≤ 4.2 | +15 | the three rating steps compound, so a 3.4 scores 45 |
+| Rating ≤ 3.9 | +15 | and a 4.3 scores nothing |
+| Rating ≤ 3.5 | +15 | |
+| At least 30 reviews | +10 | below this the rating is noise |
+| At least 150 reviews | +10 | a real business with revenue |
+| Bad reviews ≥ 10% | +15 | catches a respectable average hiding angry customers |
+| Bad reviews ≥ 20% | +10 | |
+| Public email available | +10 | workability |
+| Website available | +5 | |
+| Phone available | +5 | |
+
+The maximum possible is 110, capped at 100, and the qualified threshold is 60.
+A business at 4.4 with 1,305 reviews and 13% bad scores 45 — worth knowing
+about, not worth calling.
 
 Each lead stores the breakdown that produced its score, so the detail page can
 show exactly which rules fired and which did not:
@@ -314,7 +324,10 @@ Website available             Website available    +5
 Phone available               Phone available      +5
 ```
 
-Saving new rules re-scores every stored lead and reports how many changed.
+Saving new rules re-scores every stored lead and reports how many changed. Each
+settings section also has **Reset to defaults**, which drops the stored row so
+the section falls back to what ships with the build — the way a retuned default
+reaches an installation that already saved its own values.
 
 ---
 
