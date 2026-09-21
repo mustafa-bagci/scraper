@@ -1,0 +1,2 @@
+-- AlterTable
+ALTER TABLE "SearchRun" ADD COLUMN     "providerCost" DOUBLE PRECISION NOT NULL DEFAULT 0;

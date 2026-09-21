@@ -176,6 +176,26 @@ await t('a missing or empty distribution is reported as unavailable, never as ze
   assert.equal(stats.badReviewCount, 0);
 });
 
+await t('the cost the provider reports is passed on', async () => {
+  stubFetch({ ...okResponse([LISTING]), cost: 0.01236 });
+  const page = await new DataForSEOProvider('u:p').searchBusinesses({ limit: 1 });
+  assert.equal(page.providerCost, 0.01236, 'spend has to reach the operator, not just the logs');
+});
+
+await t('a mapping check costs one request, not two', async () => {
+  const calls = stubFetch(okResponse([LISTING]));
+  const probed = await new DataForSEOProvider('u:p').probe({ city: 'Lyon', category: 'dentist', limit: 1 });
+
+  assert.equal(calls.length, 1, 'the probe must answer the query rather than adding a second one');
+  assert.equal(probed.businesses.length, 1);
+  assert.ok(probed.raw, 'the raw payload is what makes a mapping correctable');
+
+  // It answers the caller's query, not an unfiltered one over the whole database.
+  const task = (calls[0]!.body as unknown[])[0] as Record<string, unknown>;
+  assert.deepEqual(task.categories, ['dentist']);
+  assert.ok(JSON.stringify(task.filters).includes('Lyon'));
+});
+
 await t('paging continues while the provider has more', async () => {
   stubFetch(okResponse(Array.from({ length: 100 }, () => LISTING), 250));
   const page = await new DataForSEOProvider('u:p').searchBusinesses({ limit: 250 });

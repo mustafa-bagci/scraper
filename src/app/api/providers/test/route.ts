@@ -29,21 +29,21 @@ export const POST = withAuth(
     // requirement ("credentials must be login:password"), and a generic
     // "not configured" hides which of several causes is the real one.
     const started = Date.now();
-    try {
-      const page = await provider.searchBusinesses({
-        country: body.country,
-        city: body.city,
-        category: body.category,
-        limit: 1,
-      });
+    const params = { country: body.country, city: body.city, category: body.category, limit: 1 };
 
-      const first = page.businesses[0];
+    try {
+      // One billable request, whether or not the raw payload is wanted: the
+      // probe answers the same query and returns both views of it.
+      const probed = provider.probe ? await provider.probe(params) : null;
+      const businesses = probed ? probed.businesses : (await provider.searchBusinesses(params)).businesses;
+
+      const first = businesses[0];
 
       return apiSuccess({
         ok: true,
         provider: { id: provider.id, name: provider.name, capabilities: provider.capabilities },
         ms: Date.now() - started,
-        returned: page.businesses.length,
+        returned: businesses.length,
         // What the app made of the record — the fields that drive the product.
         sample: first
           ? {
@@ -62,7 +62,7 @@ export const POST = withAuth(
               sourceUrl: first.sourceUrl,
             }
           : null,
-        ...(body.raw && provider.probe ? { raw: await provider.probe() } : {}),
+        ...(body.raw && probed ? { raw: probed.raw } : {}),
       });
     } catch (error) {
       console.error('[provider-test] failed', error);

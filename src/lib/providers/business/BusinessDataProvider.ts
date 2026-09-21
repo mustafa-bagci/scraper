@@ -69,6 +69,8 @@ export type BusinessSearchPage = {
   nextPageToken: string | null;
   /** Billable provider requests consumed by this page, for cost reporting. */
   providerCalls: number;
+  /** What the provider says this page cost, when it reports it. */
+  providerCost?: number;
 };
 
 export type ProviderCapabilities = {
@@ -97,13 +99,15 @@ export interface BusinessDataProvider {
   getBusinessReviews(externalId: string): Promise<ProviderReview[]>;
 
   /**
-   * Optional. Runs one minimal live call and returns the raw provider payload.
+   * Optional. Runs a single live call and returns both the raw provider payload
+   * and what this app made of it.
    *
-   * Field mappings are written against documentation, which drifts; this gives
-   * the operator a way to show what their account actually returns without
-   * needing server logs.
+   * Field mappings are written against documentation, which drifts; this lets
+   * the operator see what their account actually returns without server logs.
+   * It answers the same query the caller would have run, so verifying a mapping
+   * costs one billable request rather than two.
    */
-  probe?(): Promise<unknown>;
+  probe?(params: BusinessSearchParams): Promise<{ raw: unknown; businesses: NormalizedBusiness[] }>;
 }
 
 /** Errors surfaced to the operator without leaking keys or stack traces. */

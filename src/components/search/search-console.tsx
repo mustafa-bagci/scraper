@@ -48,6 +48,7 @@ type SearchRunState = {
   created: number;
   updated: number;
   providerCalls: number;
+  providerCost: number;
 };
 
 export function SearchConsole({
@@ -146,6 +147,7 @@ export function SearchConsole({
         created: 0,
         updated: 0,
         providerCalls: 0,
+        providerCost: 0,
       });
       pollRun(searchRunId);
     } catch (error) {
@@ -380,7 +382,7 @@ export function SearchConsole({
           </CardContent>
         </Card>
 
-        {run ? <RunProgress run={run} resultsHref={resultsHref} onRetry={runSearch} /> : null}
+        {run ? <RunProgress run={run} resultsHref={resultsHref} onRetry={runSearch} currency={currency} /> : null}
       </aside>
 
       <SaveSearchDialog open={saveOpen} onOpenChange={setSaveOpen} filters={filters} />
@@ -392,10 +394,12 @@ function RunProgress({
   run,
   resultsHref,
   onRetry,
+  currency,
 }: {
   run: SearchRunState;
   resultsHref: string;
   onRetry: () => void;
+  currency: string;
 }) {
   const running = run.status === 'PENDING' || run.status === 'RUNNING';
 
@@ -435,6 +439,14 @@ function RunProgress({
               <Stat label="New leads stored" value={run.created} emphasis />
               <Stat label="Existing leads refreshed" value={run.updated} />
               <Stat label="Provider requests" value={run.providerCalls} />
+              {run.providerCost > 0 ? (
+                <div className="flex items-baseline justify-between gap-3">
+                  <dt className="text-muted-foreground">Actual provider cost</dt>
+                  <dd className="tabular font-semibold">
+                    {run.providerCost.toFixed(5)} {currency}
+                  </dd>
+                </div>
+              ) : null}
             </dl>
 
             {run.status === 'COMPLETED' ? (

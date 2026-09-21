@@ -143,6 +143,7 @@ async function processSlice(searchRunId: string, budgetMs: number): Promise<Sear
   let created = run.created;
   let updated = run.updated;
   let providerCalls = run.providerCalls;
+  let providerCost = run.providerCost;
   let cursor = run.cursor;
 
   const deadline = Date.now() + budgetMs;
@@ -171,6 +172,7 @@ async function processSlice(searchRunId: string, budgetMs: number): Promise<Sear
     );
 
     providerCalls += page.providerCalls;
+    providerCost += page.providerCost ?? 0;
 
     if (page.businesses.length === 0) {
       exhausted = true;
@@ -252,6 +254,7 @@ async function processSlice(searchRunId: string, budgetMs: number): Promise<Sear
         created,
         updated,
         providerCalls,
+        providerCost,
         cursor,
         // Refresh the lock so a long slice is not mistaken for a dead one.
         lockedAt: new Date(),

@@ -81,6 +81,7 @@ export class DataForSEOProvider implements BusinessDataProvider {
       businesses: items.map((item) => this.normalize(item)),
       nextPageToken: more ? String(nextOffset) : null,
       providerCalls: 1,
+      providerCost: payload.cost ?? 0,
     };
   }
 
@@ -100,9 +101,11 @@ export class DataForSEOProvider implements BusinessDataProvider {
     return [];
   }
 
-  /** Runs one minimal live query and returns the raw payload, for support. */
-  async probe(): Promise<unknown> {
-    return this.post({ limit: 1, filters: [['rating.votes_count', '>', 0]] });
+  /** One request that serves both the mapping check and its raw evidence. */
+  async probe(params: BusinessSearchParams) {
+    const payload = await this.post(buildTask(params, 0, Math.min(params.limit, PAGE_SIZE)));
+    const items = payload.tasks?.[0]?.result?.[0]?.items ?? [];
+    return { raw: payload, businesses: items.map((item) => this.normalize(item)) };
   }
 
   private async post(task: Record<string, unknown>): Promise<DataForSeoResponse> {

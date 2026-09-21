@@ -16,6 +16,7 @@ export function serialiseSearchRun(run: SearchRun) {
     created: run.created,
     updated: run.updated,
     providerCalls: run.providerCalls,
+    providerCost: run.providerCost,
     provider: run.provider,
     filters: run.filters,
     startedAt: run.startedAt,

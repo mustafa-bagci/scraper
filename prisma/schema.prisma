@@ -351,13 +351,15 @@ model SearchRun {
   /// Set while a tick is processing; a stale lock is reclaimed automatically.
   lockedAt DateTime?
 
-  discovered    Int @default(0)
-  unique        Int @default(0)
-  duplicates    Int @default(0)
-  matched       Int @default(0)
-  created       Int @default(0)
-  updated       Int @default(0)
-  providerCalls Int @default(0)
+  discovered    Int   @default(0)
+  unique        Int   @default(0)
+  duplicates    Int   @default(0)
+  matched       Int   @default(0)
+  created       Int   @default(0)
+  updated       Int   @default(0)
+  providerCalls Int   @default(0)
+  /// What the provider itself reported this run cost, when it reports it.
+  providerCost  Float @default(0)
 
   startedAt  DateTime?
   finishedAt DateTime?
