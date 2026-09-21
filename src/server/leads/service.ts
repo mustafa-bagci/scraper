@@ -49,11 +49,19 @@ function buildOrderBy(query: LeadQuery): Prisma.LeadOrderByWithRelationInput[] {
   return [primary, { id: 'asc' }];
 }
 
+/** How many leads a filter matches, without fetching any of them. */
+export async function countLeads(filters: LeadQuery['filters']): Promise<number> {
+  return prisma.lead.count({ where: toPrismaWhere(filters) });
+}
+
 /** Ids only — used by "export everything that matches the current filters". */
 export async function listLeadIds(query: Pick<LeadQuery, 'filters'>, limit: number): Promise<string[]> {
   const rows = await prisma.lead.findMany({
     where: toPrismaWhere(query.filters),
     select: { id: true },
+    // Ordered so a truncated selection is the same set every time it is asked
+    // for, rather than whatever the planner happened to return.
+    orderBy: { id: 'asc' },
     take: limit,
   });
   return rows.map((row) => row.id);

@@ -4,7 +4,10 @@ import { apiError, apiSuccess, parseBody, withAuth } from '@/lib/api/handler';
 import { INITIAL_TICK_BUDGET_MS, advanceEmailDiscovery, startEmailDiscovery } from '@/server/jobs/email-discovery';
 
 const schema = z.object({
-  leadIds: z.array(z.string().cuid()).min(1).max(500),
+  // Matches what "select all results" can hand over. A selection larger than
+  // the daily allowance is refused by the quota check below, which names the
+  // setting to change — far more useful than a bare validation error.
+  leadIds: z.array(z.string().cuid()).min(1).max(2000),
   verify: z.boolean().optional(),
 });
 

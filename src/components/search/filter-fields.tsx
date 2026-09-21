@@ -162,6 +162,66 @@ export function PresenceFilter({
   );
 }
 
+/**
+ * A set filter rendered as toggles rather than a dropdown.
+ *
+ * The values are few and the operator usually wants two or three of them at
+ * once ("show me what I have an address for, and what I looked for and did
+ * not"), which a single-value select cannot express.
+ */
+export function ChoiceFilter<T extends string>({
+  label,
+  hint,
+  options,
+  value,
+  onChange,
+  className,
+}: {
+  label: string;
+  hint?: string;
+  options: ReadonlyArray<{ value: T; label: string }>;
+  value: T[] | undefined;
+  onChange: (value: T[] | undefined) => void;
+  className?: string;
+}) {
+  const selected = value ?? [];
+
+  const toggle = (option: T) => {
+    const next = selected.includes(option)
+      ? selected.filter((entry) => entry !== option)
+      : [...selected, option];
+    // An empty set means "no opinion", not "match nothing".
+    onChange(next.length ? next : undefined);
+  };
+
+  return (
+    <Field label={label} hint={hint} className={className}>
+      <div className="flex flex-wrap gap-1.5">
+        {options.map((option) => {
+          const active = selected.includes(option.value);
+          return (
+            <button
+              key={option.value}
+              type="button"
+              aria-pressed={active}
+              onClick={() => toggle(option.value)}
+              className={cn(
+                'rounded-md border px-2 py-1 text-xs font-medium transition-colors',
+                'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring',
+                active
+                  ? 'border-primary bg-primary text-primary-foreground'
+                  : 'border-border bg-background text-muted-foreground hover:bg-secondary hover:text-foreground',
+              )}
+            >
+              {option.label}
+            </button>
+          );
+        })}
+      </div>
+    </Field>
+  );
+}
+
 export const COUNTRY_SUGGESTIONS = ['France', 'Belgique', 'Suisse', 'Luxembourg', 'Nederland', 'Deutschland'];
 
 export const CATEGORY_SUGGESTIONS = [

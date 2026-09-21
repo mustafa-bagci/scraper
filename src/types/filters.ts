@@ -99,5 +99,12 @@ export function describeFilters(filters: LeadFilters): string {
   if (filters.badReviewCount?.min !== undefined) parts.push(`${filters.badReviewCount.min}+ bad reviews`);
   if (filters.email === 'required') parts.push('email required');
   if (filters.website === 'required') parts.push('website required');
+  if (filters.emailStatus?.length) parts.push(`email lookup: ${filters.emailStatus.map(emailStatusWord).join(', ')}`);
+  if (filters.status?.length) parts.push(`status: ${filters.status.map((value) => value.toLowerCase()).join(', ')}`);
   return parts.length ? parts.join(' · ') : 'All businesses';
+}
+
+/** Plain wording for the header line; the badge labels live with the badges. */
+function emailStatusWord(status: EmailStatus): string {
+  return status === 'UNKNOWN' ? 'not checked' : status.toLowerCase().replace('_', ' ');
 }

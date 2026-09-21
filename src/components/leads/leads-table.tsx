@@ -23,6 +23,7 @@ import type { LeadRow } from '@/types/lead-row';
 import type { LeadFilters, LeadQuery, SortableLeadField } from '@/types/filters';
 import { queryToSearchParams } from '@/lib/filters/url';
 import { apiFetch, ApiClientError } from '@/lib/api/client';
+import { countActiveFilters } from '@/lib/filters/url';
 import { LeadsFilterPanel } from './leads-filter-panel';
 import { ExportDialog } from './export-dialog';
 import { EmailStatusBadge, LEAD_STATUS_LABELS, LeadStatusBadge, RatingValue, ScorePill } from './display';
@@ -108,6 +109,7 @@ export function LeadsTable({
   const [exportOpen, setExportOpen] = useState(false);
   const [deleteOpen, setDeleteOpen] = useState(false);
   const [pending, setPending] = useState(false);
+  const [selectingAll, setSelectingAll] = useState(false);
   const [emailJob, setEmailJob] = useState<EmailJobState | null>(null);
   const pollRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
@@ -122,8 +124,11 @@ export function LeadsTable({
 
   useEffect(() => () => stopPolling(), []);
 
-  // Selection is per page of results; changing page clears it.
-  useEffect(() => setSelected(new Set()), [query.page, query.sortBy, query.sortDir]);
+  // Selection spans pages, so paging and sorting keep it. A change of filter
+  // is a different result set, and carrying a selection across it would act on
+  // leads the operator can no longer see.
+  const filterKey = JSON.stringify(query.filters);
+  useEffect(() => setSelected(new Set()), [filterKey]);
 
   const stopPolling = () => {
     if (pollRef.current) {
@@ -142,6 +147,8 @@ export function LeadsTable({
   };
 
   const visibleColumns = useMemo(() => COLUMNS.filter((column) => !hidden.includes(column.id)), [hidden]);
+
+  const activeFilterCount = countActiveFilters(query.filters);
 
   const navigate = useCallback(
     (next: Partial<LeadQuery>) => {
@@ -165,6 +172,33 @@ export function LeadsTable({
 
   const toggleAll = () => {
     setSelected(allSelected ? new Set() : new Set(rows.map((row) => row.id)));
+  };
+
+  /**
+   * Extends the selection to every lead the current filter matches.
+   *
+   * The header checkbox can only reach the rows it has, which on a list of
+   * several hundred is one page in ten. The ids come from the server so the
+   * set is exactly what the filter matches, not what happens to be rendered.
+   */
+  const selectAllMatching = async () => {
+    setSelectingAll(true);
+    try {
+      const result = await apiFetch<{ ids: string[]; matching: number; truncated: boolean; limit: number }>(
+        '/api/leads/ids',
+        { method: 'POST', body: { filters: query.filters } },
+      );
+      setSelected(new Set(result.ids));
+      if (result.truncated) {
+        toast.warning(`Selected the first ${formatNumber(result.limit)} of ${formatNumber(result.matching)} matches`, {
+          description: 'Narrow the filter to work through the rest.',
+        });
+      }
+    } catch (error) {
+      toast.error(error instanceof ApiClientError ? error.message : 'The full selection could not be loaded.');
+    } finally {
+      setSelectingAll(false);
+    }
   };
 
   const toggleOne = (id: string) => {
@@ -319,7 +353,26 @@ export function LeadsTable({
       ) : null}
 
       {selected.size > 0 ? (
-        <div className="surface sticky top-[76px] z-20 flex flex-wrap items-center gap-2 p-2.5 shadow-md">
+        <div className="surface sticky top-[76px] z-20 space-y-2 p-2.5 shadow-md">
+          {/* The header checkbox can only reach this page; say so, and offer
+              the rest rather than letting the count be mistaken for the lot. */}
+          {selected.size < total ? (
+            <div className="flex flex-wrap items-center gap-x-2 gap-y-1 text-xs text-muted-foreground">
+              <span>
+                {formatNumber(total)} leads match {activeFilterCount > 0 ? 'this filter' : 'in total'}, over{' '}
+                {formatNumber(pageCount)} pages.
+              </span>
+              <Button size="sm" variant="link" className="h-auto p-0" onClick={selectAllMatching} loading={selectingAll}>
+                Select all {formatNumber(total)}
+              </Button>
+            </div>
+          ) : total > rows.length ? (
+            <p className="text-xs text-muted-foreground">
+              All {formatNumber(total)} matching leads are selected, across every page.
+            </p>
+          ) : null}
+
+          <div className="flex flex-wrap items-center gap-2">
           <Badge variant="info">{formatNumber(selected.size)} selected</Badge>
 
           <Button size="sm" variant="outline" onClick={findEmails} loading={pending}>
@@ -355,6 +408,7 @@ export function LeadsTable({
           <Button size="sm" variant="ghost" className="ml-auto" onClick={() => setSelected(new Set())}>
             Clear selection
           </Button>
+          </div>
         </div>
       ) : null}
 

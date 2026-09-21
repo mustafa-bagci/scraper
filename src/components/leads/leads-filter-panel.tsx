@@ -2,10 +2,13 @@
 
 import { useState } from 'react';
 import { RotateCcw, SlidersHorizontal, X } from 'lucide-react';
+import type { EmailStatus, LeadStatus } from '@prisma/client';
 import type { LeadFilters } from '@/types/filters';
+import { EMAIL_STATUS_LABELS, LEAD_STATUS_LABELS } from '@/components/leads/display';
 import {
   CATEGORY_SUGGESTIONS,
   COUNTRY_SUGGESTIONS,
+  ChoiceFilter,
   PresenceFilter,
   RangeFilter,
   TextFilter,
@@ -14,6 +17,21 @@ import {
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { countActiveFilters } from '@/lib/filters/url';
+
+/** Ordered by how an operator reads them, not by how the enum is declared. */
+const EMAIL_STATUS_OPTIONS: ReadonlyArray<{ value: EmailStatus; label: string }> = [
+  'FOUND',
+  'VALID',
+  'NOT_FOUND',
+  'UNKNOWN',
+  'RISKY',
+  'INVALID',
+  'DISPOSABLE',
+].map((value) => ({ value: value as EmailStatus, label: EMAIL_STATUS_LABELS[value as EmailStatus] }));
+
+const LEAD_STATUS_OPTIONS: ReadonlyArray<{ value: LeadStatus; label: string }> = (
+  Object.keys(LEAD_STATUS_LABELS) as LeadStatus[]
+).map((value) => ({ value, label: LEAD_STATUS_LABELS[value] }));
 
 export function LeadsFilterPanel({
   filters,
@@ -129,6 +147,22 @@ export function LeadsFilterPanel({
             <PresenceFilter id="f-website" label="Website" value={draft.website} onChange={(value) => update('website', value)} />
             <PresenceFilter id="f-email" label="Email" value={draft.email} onChange={(value) => update('email', value)} />
             <PresenceFilter id="f-phone" label="Phone" value={draft.phone} onChange={(value) => update('phone', value)} />
+          </div>
+
+          <div className="grid gap-4 border-t border-border pt-4 lg:grid-cols-2">
+            <ChoiceFilter
+              label="Email lookup"
+              hint="What the last public-email check returned. Pick none to include every lead."
+              options={EMAIL_STATUS_OPTIONS}
+              value={draft.emailStatus}
+              onChange={(value) => update('emailStatus', value)}
+            />
+            <ChoiceFilter
+              label="Lead status"
+              options={LEAD_STATUS_OPTIONS}
+              value={draft.status}
+              onChange={(value) => update('status', value)}
+            />
           </div>
 
           <div className="flex items-center justify-end gap-2 border-t border-border pt-3">
