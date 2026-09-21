@@ -224,7 +224,7 @@ export function LeadsTable({
       stopPolling();
       pollRef.current = setInterval(async () => {
         try {
-          const state = await apiFetch<EmailJobState>(`/api/jobs/${jobId}`);
+          const state = await apiFetch<EmailJobState>(`/api/jobs/${jobId}/advance`, { method: 'POST' });
           setEmailJob(state);
           if (state.status === 'COMPLETED' || state.status === 'FAILED') {
             stopPolling();

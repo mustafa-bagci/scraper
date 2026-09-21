@@ -1,5 +1,5 @@
 import 'server-only';
-import { ActivityType, EmailStatus, JobKind, JobStatus, type Prisma, WebsiteStatus } from '@prisma/client';
+import { ActivityType, EmailStatus, type Job, JobKind, JobStatus, type Prisma, WebsiteStatus } from '@prisma/client';
 import { prisma } from '@/lib/db/prisma';
 import { getEmailFinder, getEmailVerifier } from '@/lib/providers/registry';
 import { consumeDailyQuota, releaseDailyQuota } from '@/lib/security/rate-limit';
@@ -10,10 +10,19 @@ import type { EmailCandidate } from '@/lib/providers/email/EmailFinderProvider';
 /**
  * Bulk public-email discovery.
  *
- * Runs as a background job so a 50-lead request never blocks an HTTP
- * response. Progress (`processed / total`, found, not found) is persisted so
- * the UI can poll it.
+ * Like business discovery, the job is **resumable and processed in bounded
+ * slices**: a serverless invocation is frozen once it responds, so the work is
+ * driven by successive ticks that each claim a lock, process leads until their
+ * time budget is spent, persist the cursor and release the lock.
  */
+
+/** A lock older than this is assumed to belong to a dead invocation. */
+const LOCK_TTL_MS = 120_000;
+
+/** Budget for the tick started by the API route via `after()`. */
+export const INITIAL_TICK_BUDGET_MS = 50_000;
+/** Budget for a tick driven by a client poll — must stay responsive. */
+export const POLL_TICK_BUDGET_MS = 10_000;
 
 export type StartEmailJobResult =
   | { ok: true; jobId: string; total: number }
@@ -54,42 +63,84 @@ export async function startEmailDiscovery(
     },
   });
 
-  void runEmailDiscovery(job.id).catch(async (error: unknown) => {
-    console.error('[email-discovery] unhandled failure', error);
-    await prisma.job
-      .update({
-        where: { id: job.id },
-        data: { status: JobStatus.FAILED, error: 'The email discovery job stopped unexpectedly.', finishedAt: new Date() },
-      })
-      .catch(() => undefined);
-  });
-
   return { ok: true, jobId: job.id, total: targets.length };
 }
 
-export async function runEmailDiscovery(jobId: string): Promise<void> {
-  const job = await prisma.job.findUnique({ where: { id: jobId } });
-  if (!job || job.status !== JobStatus.PENDING) return;
+/**
+ * Processes one slice of an email discovery job.
+ *
+ * Safe to call concurrently and repeatedly: if another tick holds the lock, or
+ * the job has finished, it returns the current state untouched.
+ */
+export async function advanceEmailDiscovery(
+  jobId: string,
+  budgetMs: number = POLL_TICK_BUDGET_MS,
+): Promise<Job | null> {
+  const existing = await prisma.job.findUnique({ where: { id: jobId } });
+  if (!existing) return null;
+  if (existing.status === JobStatus.COMPLETED || existing.status === JobStatus.FAILED) return existing;
+
+  const claimed = await prisma.job.updateMany({
+    where: {
+      id: jobId,
+      status: { in: [JobStatus.PENDING, JobStatus.RUNNING] },
+      OR: [{ lockedAt: null }, { lockedAt: { lt: new Date(Date.now() - LOCK_TTL_MS) } }],
+    },
+    data: {
+      status: JobStatus.RUNNING,
+      lockedAt: new Date(),
+      ...(existing.startedAt ? {} : { startedAt: new Date(), statusMessage: 'Checking public website pages…' }),
+    },
+  });
+
+  // Another tick is already working on this job; report what we have.
+  if (claimed.count === 0) return prisma.job.findUnique({ where: { id: jobId } });
+
+  try {
+    return await processEmailSlice(jobId, budgetMs);
+  } catch (error) {
+    console.error('[email-discovery] tick failed', { jobId, error });
+    return prisma.job.update({
+      where: { id: jobId },
+      data: {
+        status: JobStatus.FAILED,
+        error: 'The email discovery job stopped unexpectedly.',
+        lockedAt: null,
+        finishedAt: new Date(),
+      },
+    });
+  }
+}
+
+async function processEmailSlice(jobId: string, budgetMs: number): Promise<Job> {
+  let job = await prisma.job.findUniqueOrThrow({ where: { id: jobId } });
 
   const payload = (job.payload ?? {}) as { leadIds?: string[]; verify?: boolean };
   const leadIds = payload.leadIds ?? [];
   const shouldVerify = payload.verify ?? true;
 
-  await prisma.job.update({
-    where: { id: jobId },
-    data: { status: JobStatus.RUNNING, startedAt: new Date(), statusMessage: 'Checking public website pages…' },
-  });
-
   const finder = await getEmailFinder();
   const verifier = await getEmailVerifier();
 
-  let processed = 0;
-  let succeeded = 0;
-  let failed = 0;
+  // Counters and position accumulate across ticks.
+  let cursor = job.cursor;
+  let processed = job.processed;
+  let succeeded = job.succeeded;
+  let failed = job.failed;
 
-  for (const leadId of leadIds) {
-    const lead = await prisma.lead.findUnique({ where: { id: leadId } });
-    if (!lead) {
+  const deadline = Date.now() + budgetMs;
+  // Every tick processes at least one lead, so a tick can never return without
+  // making progress. The budget is then checked between leads: a crawl always
+  // runs to completion, so a lead is never left half-processed.
+  let firstLead = true;
+
+  while (cursor < leadIds.length && (firstLead || Date.now() < deadline)) {
+    firstLead = false;
+    const leadId = leadIds[cursor];
+    cursor += 1;
+
+    const lead = leadId ? await prisma.lead.findUnique({ where: { id: leadId } }) : null;
+    if (!lead || !leadId) {
       processed += 1;
       failed += 1;
       continue;
@@ -145,27 +196,33 @@ export async function runEmailDiscovery(jobId: string): Promise<void> {
     }
 
     processed += 1;
-    await prisma.job.update({
+    job = await prisma.job.update({
       where: { id: jobId },
       data: {
+        cursor,
         processed,
         succeeded,
         failed,
+        // Refresh the lock so a long slice is not mistaken for a dead one.
+        lockedAt: new Date(),
         statusMessage: `${processed} / ${leadIds.length} checked`,
       },
     });
   }
 
+  if (cursor < leadIds.length) {
+    // More work remains; the next tick resumes from the cursor.
+    return prisma.job.update({ where: { id: jobId }, data: { lockedAt: null } });
+  }
+
   // Unused reservations go back to the daily quota.
   await releaseDailyQuota('email:lookups', Math.max(0, leadIds.length - processed));
 
-  await prisma.job.update({
+  return prisma.job.update({
     where: { id: jobId },
     data: {
       status: JobStatus.COMPLETED,
-      processed,
-      succeeded,
-      failed,
+      lockedAt: null,
       statusMessage: `Found ${succeeded} · not found ${failed}`,
       result: { found: succeeded, notFound: failed } as Prisma.InputJsonValue,
       finishedAt: new Date(),

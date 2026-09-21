@@ -1,10 +1,11 @@
 import { apiError, apiSuccess, handleUnexpected } from '@/lib/api/handler';
 import { getCurrentUser } from '@/lib/auth/session';
 import { prisma } from '@/lib/db/prisma';
+import { serialiseJob } from '@/server/jobs/serialise';
 
 type Params = { params: Promise<{ id: string }> };
 
-/** Progress for background jobs (email discovery, imports). */
+/** Read-only progress for a background job. Advancing it is a POST to ./advance. */
 export async function GET(_request: Request, { params }: Params) {
   try {
     const user = await getCurrentUser();
@@ -14,18 +15,7 @@ export async function GET(_request: Request, { params }: Params) {
     const job = await prisma.job.findUnique({ where: { id } });
     if (!job) return apiError('Job not found.', 404);
 
-    return apiSuccess({
-      id: job.id,
-      kind: job.kind,
-      status: job.status,
-      total: job.total,
-      processed: job.processed,
-      succeeded: job.succeeded,
-      failed: job.failed,
-      statusMessage: job.statusMessage,
-      error: job.error,
-      finishedAt: job.finishedAt,
-    });
+    return apiSuccess(serialiseJob(job));
   } catch (error) {
     return handleUnexpected(error);
   }

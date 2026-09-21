@@ -56,7 +56,11 @@ export type BusinessSearchParams = {
   category?: string;
   keyword?: string;
   openNow?: boolean;
-  /** Hard ceiling on records to return; the runner also applies cost limits. */
+  /**
+   * Hard ceiling on records for the **whole search**, not for one page, and
+   * the same on every call. Paging position comes from the page token, so an
+   * implementation must not treat this as "how many are still wanted".
+   */
   limit: number;
 };
 

@@ -96,7 +96,10 @@ export function SearchConsole({
       stopPolling();
       pollRef.current = setInterval(async () => {
         try {
-          const state = await apiFetch<SearchRunState>(`/api/search/${searchRunId}`);
+          // Polling advances the job: each tick processes a bounded slice and
+          // returns the live counters, so progress continues even where a
+          // background promise would have been killed.
+          const state = await apiFetch<SearchRunState>(`/api/search/${searchRunId}/advance`, { method: 'POST' });
           setRun(state);
 
           if (state.status === 'COMPLETED' || state.status === 'FAILED') {

@@ -82,6 +82,13 @@ async function main() {
   }
   console.log('  ✓ default settings');
 
+  // Production deployments seed the admin account and settings only. Set
+  // SEED_DEMO_DATA=false in the environment to skip the synthetic businesses.
+  if (process.env.SEED_DEMO_DATA === 'false') {
+    console.log('  • SEED_DEMO_DATA=false — admin and settings only, no demo data.');
+    return;
+  }
+
   const existingLeads = await prisma.lead.count();
   if (existingLeads > 0) {
     console.log(`  • ${existingLeads} leads already present — skipping demo data.`);

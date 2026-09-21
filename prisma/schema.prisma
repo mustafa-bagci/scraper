@@ -4,12 +4,21 @@
 // provenance fields.
 
 generator client {
-  provider = "prisma-client-js"
+  provider      = "prisma-client-js"
+  // rhel-openssl-3.0.x is the runtime Vercel's Node functions use; without it
+  // the client is generated for the build container only and fails at runtime.
+  binaryTargets = ["native", "rhel-openssl-3.0.x"]
 }
 
 datasource db {
-  provider = "postgresql"
-  url      = env("DATABASE_URL")
+  provider  = "postgresql"
+  // Pooled connection (PgBouncer / Neon / Supabase pooler). Serverless spawns
+  // many short-lived instances, so a direct connection exhausts Postgres.
+  url       = env("DATABASE_URL")
+  // Unpooled connection, used by `prisma migrate` only — migrations cannot run
+  // through PgBouncer in transaction mode. On a single long-lived server set it
+  // to the same value as DATABASE_URL.
+  directUrl = env("DIRECT_URL")
 }
 
 // ---------------------------------------------------------------------------
@@ -336,6 +345,12 @@ model SearchRun {
   statusMessage String?
   error         String?
 
+  /// Provider page token the next tick resumes from. Jobs are advanced in
+  /// bounded slices so they survive a serverless invocation ending.
+  cursor   String?
+  /// Set while a tick is processing; a stale lock is reclaimed automatically.
+  lockedAt DateTime?
+
   discovered    Int @default(0)
   unique        Int @default(0)
   duplicates    Int @default(0)
@@ -370,6 +385,10 @@ model Job {
   processed     Int       @default(0)
   succeeded     Int       @default(0)
   failed        Int       @default(0)
+  /// Index into the job's work list that the next tick resumes from.
+  cursor        Int       @default(0)
+  /// Set while a tick is processing; a stale lock is reclaimed automatically.
+  lockedAt      DateTime?
   payload       Json?
   result        Json?
   error         String?

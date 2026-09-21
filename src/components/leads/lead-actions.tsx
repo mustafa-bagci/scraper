@@ -59,7 +59,9 @@ export function LeadActions({
       // Single-lead discovery finishes quickly; poll until the job settles.
       for (let attempt = 0; attempt < 60; attempt += 1) {
         await new Promise((resolve) => setTimeout(resolve, 700));
-        const job = await apiFetch<{ status: string; succeeded: number }>(`/api/jobs/${jobId}`);
+        const job = await apiFetch<{ status: string; succeeded: number }>(`/api/jobs/${jobId}/advance`, {
+          method: 'POST',
+        });
         if (job.status === 'COMPLETED' || job.status === 'FAILED') {
           if (job.succeeded > 0) toast.success('Public email found');
           else toast.info('No public email found on this website');

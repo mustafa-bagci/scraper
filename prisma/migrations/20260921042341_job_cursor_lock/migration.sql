@@ -1,0 +1,3 @@
+-- AlterTable
+ALTER TABLE "Job" ADD COLUMN     "cursor" INTEGER NOT NULL DEFAULT 0,
+ADD COLUMN     "lockedAt" TIMESTAMP(3);

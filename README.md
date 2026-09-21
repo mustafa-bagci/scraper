@@ -34,6 +34,7 @@ It is not a CRM. It is the thing that fills one.
 - [Security](#security)
 - [Cost control](#cost-control)
 - [Data protection](#data-protection)
+- [Deploying to Vercel](#deploying-to-vercel)
 - [Connecting a live provider](#connecting-a-live-provider)
 - [Testing](#testing)
 - [Design notes](#design-notes)
@@ -104,6 +105,7 @@ business.
 | `npm run lint` | ESLint, zero-warning policy. |
 | `npm run typecheck` | `tsc --noEmit` in strict mode. |
 | `npm test` | Logic tests for SSRF, email extraction, scoring, filters, dedupe, robots.txt. |
+| `npm run test:jobs` | Resumability tests for the job engine (needs `DATABASE_URL`). |
 | `npx prisma migrate dev` | Apply/author migrations in development. |
 | `npx prisma migrate deploy` | Apply migrations in production. |
 | `npx prisma db seed` | Seed the admin account, settings and demo data. |
@@ -118,9 +120,11 @@ committed.
 
 | Variable | Required | Notes |
 |---|---|---|
-| `DATABASE_URL` | yes | PostgreSQL connection string. |
+| `DATABASE_URL` | yes | PostgreSQL connection string. On serverless this must be the **pooled** URL. |
+| `DIRECT_URL` | yes | Unpooled connection, used by `prisma migrate` only. Same value as `DATABASE_URL` on a single server. |
 | `AUTH_SECRET` | yes | ≥ 32 chars. Signs session cookies **and** derives the key that encrypts provider API keys at rest. Rotating it invalidates both. |
 | `ADMIN_EMAIL` / `ADMIN_PASSWORD` | seed only | Credentials for the account the seed script creates. |
+| `SEED_DEMO_DATA` | no | `false` seeds the admin account and settings without demo businesses. Use this in production. |
 | `BUSINESS_DATA_PROVIDER` | no | `mock` (default) or `google-places`. |
 | `BUSINESS_DATA_API_KEY` | conditional | Required by `google-places`. |
 | `EMAIL_FINDER_PROVIDER` | no | `website-crawler` (default) or `mock`. |
@@ -478,6 +482,131 @@ behalf.
 
 ---
 
+## Deploying to Vercel
+
+The app is Vercel-ready, but serverless changes one thing fundamentally, so read
+[Background jobs on serverless](#background-jobs-on-serverless) below before you
+rely on long crawls.
+
+### 1. A database that tolerates serverless
+
+Every invocation is a new process, so a plain Postgres connection string will
+exhaust `max_connections`. Use a provider with a pooler — Neon, Supabase or
+Vercel Postgres — and take **both** URLs:
+
+| Variable | Which URL |
+|---|---|
+| `DATABASE_URL` | the **pooled** one (`...-pooler...`, or `?pgbouncer=true`) |
+| `DIRECT_URL` | the **direct** one — migrations cannot run through a transaction-mode pooler |
+
+Pick a region next to `cdg1` (Paris), which is what `vercel.json` pins the
+functions to. A database in `us-east-1` with functions in Paris adds a round
+trip to every query.
+
+### 2. Import the repository
+
+In Vercel: **Add New → Project → Import** this repo. The framework is detected
+automatically; leave the build settings alone. Vercel runs the `vercel-build`
+script, which is:
+
+```
+prisma generate && prisma migrate deploy && next build
+```
+
+So migrations are applied on every deploy, with the direct connection, before
+the app is compiled.
+
+> If you use Preview deployments, give them their own database — otherwise a
+> preview branch runs `migrate deploy` against production.
+
+### 3. Environment variables
+
+Set these for **Production** (and Preview, if you use it):
+
+```
+DATABASE_URL       postgres://…-pooler…       # pooled
+DIRECT_URL         postgres://…               # direct
+AUTH_SECRET        <openssl rand -base64 48>
+SEED_DEMO_DATA     false
+BUSINESS_DATA_PROVIDER   mock                 # or google-places
+EMAIL_FINDER_PROVIDER    website-crawler
+EMAIL_VERIFICATION_PROVIDER  none
+```
+
+`AUTH_SECRET` signs session cookies **and** derives the key that encrypts
+provider API keys at rest. Rotating it logs everyone out and makes stored keys
+unreadable, so generate it once and keep it.
+
+Provider API keys are better added in **Settings → Data Providers** once the app
+is up — they are encrypted in the database rather than sitting in environment
+variables.
+
+### 4. Create the admin account
+
+The seed is not run by the build. Once the first deploy is live, run it locally
+against the production database:
+
+```bash
+DATABASE_URL='<direct url>' DIRECT_URL='<direct url>' \
+ADMIN_EMAIL='you@murgay.com' ADMIN_PASSWORD='<a real password>' \
+SEED_DEMO_DATA=false npx prisma db seed
+```
+
+Use the **direct** URL here, and `SEED_DEMO_DATA=false` so no synthetic
+businesses land in production.
+
+### 5. Check it
+
+`https://<your-app>.vercel.app/api/health` should return
+`{"ok":true,"database":"up"}`. Then sign in and run one small search.
+
+### Background jobs on serverless
+
+A serverless function is frozen the moment it returns a response, so the usual
+"kick off a promise and return" pattern silently loses the work. Discovery and
+bulk email discovery are therefore **resumable and processed in bounded
+slices**:
+
+- Starting a job creates a row and schedules the first slice with `after()`,
+  which keeps the invocation alive without delaying the response.
+- Each slice claims a lock, works until its time budget is spent, persists its
+  cursor and counters, and releases the lock.
+- Every client poll advances the job further. A slice killed mid-flight leaves a
+  stale lock that the next one reclaims.
+
+The practical consequences on Vercel:
+
+- **Keep the tab open for long runs.** Polls are what drive the work after the
+  first slice. Closing the tab pauses a job; reopening the search resumes it
+  exactly where it stopped — nothing is lost or double-counted.
+- **Function duration bounds one slice, not the job.** `maxDuration` is set to
+  60s, which fits the Hobby plan.
+- **Heavy crawling deserves a real worker.** Website crawling is slow by design
+  (5 pages × a 10s timeout per lead). Hundreds of leads will work, but it will
+  take many slices. If that becomes routine, move the tick loop behind a queue
+  (Inngest, QStash, or a Vercel Cron hitting the advance endpoint) — the job
+  engine already exposes exactly the right seam: `advanceSearchRun(id, budget)`
+  and `advanceEmailDiscovery(id, budget)` are idempotent and safe to call
+  concurrently.
+
+`npm run test:jobs` covers this directly: it drives jobs with a zero-length
+budget so every tick is cut short, and asserts they still finish with identical
+counters, that concurrent ticks never double-count, and that a stale lock is
+reclaimed.
+
+### Rate limiting caveat
+
+The per-user sliding windows (login attempts, search submissions, exports) are
+**in-process**. On Vercel each instance has its own counters, so the effective
+limit is per instance rather than global. The limits that protect your wallet —
+maximum businesses per search, email lookups and verifications per day — are
+database-backed counters and are enforced correctly across instances.
+
+If you need strict global request limits, back `src/lib/security/rate-limit.ts`
+with Redis (Upstash); the interface is already the right shape.
+
+---
+
 ## Connecting a live provider
 
 1. **Settings → Data Providers** → choose *Google Places API* → paste the key →
@@ -499,7 +628,8 @@ is already in place.
 ```bash
 npm run lint       # ESLint, zero warnings
 npm run typecheck  # strict TypeScript
-npm test           # logic tests
+npm test           # logic tests (no database needed)
+npm run test:jobs  # job resumability (needs DATABASE_URL)
 npm run build      # production build
 ```
 
@@ -516,6 +646,11 @@ npm run build      # production build
   satisfies a rating range.
 - Duplicate detection — accents, legal forms and phone formats collapsing.
 - robots.txt — `Disallow`/`Allow` precedence, wildcards, `Crawl-delay`.
+
+`npm run test:jobs` covers the job engine against the serverless failure mode:
+jobs driven entirely by interrupted ticks still complete with identical
+counters, every tick makes progress, concurrent ticks do not double-count, a
+stale lock is reclaimed, and a finished run is never re-processed.
 
 ---
 
