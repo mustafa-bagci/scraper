@@ -106,6 +106,7 @@ business.
 | `npm run typecheck` | `tsc --noEmit` in strict mode. |
 | `npm test` | Logic tests for SSRF, email extraction, scoring, filters, dedupe, robots.txt. |
 | `npm run test:jobs` | Resumability tests for the job engine (needs `DATABASE_URL`). |
+| `npm run test:bootstrap` | First-run admin bootstrap guards (needs `DATABASE_URL`). |
 | `npx prisma migrate dev` | Apply/author migrations in development. |
 | `npx prisma migrate deploy` | Apply migrations in production. |
 | `npx prisma db seed` | Seed the admin account, settings and demo data. |
@@ -549,10 +550,12 @@ never touches it. If your database has no separate unpooled connection, leave it
 out — the build falls back to `DATABASE_URL` and says so in the log. (Set it
 when you do have one: migrations through a transaction-mode pooler can fail.)
 
-**Do not set these in Vercel:**
+Add `ADMIN_EMAIL` and `ADMIN_PASSWORD` too — step 4 explains what they do.
 
-- `ADMIN_EMAIL` / `ADMIN_PASSWORD` / `SEED_DEMO_DATA` — these belong to the seed
-  command, which you run from your own machine (step 4). Vercel never runs it.
+**Do not set this in Vercel:**
+
+- `SEED_DEMO_DATA` — it belongs to the seed command, which you run from your own
+  machine. Vercel never runs it.
 - Provider API keys — add them in **Settings → Data Providers** once the app is
   up, where they are encrypted in the database instead of sitting in plain text
   in an environment variable.
@@ -571,17 +574,35 @@ Optional, only if you want to change a default: `BUSINESS_DATA_PROVIDER`
 
 ### 4. Create the admin account
 
-The seed is not run by the build. Once the first deploy is live, run it locally
-against the production database:
+Add two more environment variables in Vercel and redeploy:
+
+```
+ADMIN_EMAIL      you@murgay.com
+ADMIN_PASSWORD   <a real password, at least 12 characters>
+```
+
+The first time the login page is opened, the app creates that account and tells
+you it is ready. No terminal, no seed command.
+
+It is deliberately a one-way door:
+
+- It only runs while the `User` table is **empty**. Once an account exists these
+  variables are ignored, so changing them later cannot create a second admin or
+  take over the installation.
+- There is no default. A default password on an internet-facing admin login is
+  a backdoor, so the app refuses to create anything until you set a real one,
+  and rejects the example password from this README outright.
+- The login page never shows the address. You know what you configured; a
+  passer-by should not be handed the admin username of a fresh install.
+
+You can still use the seed script instead if you prefer — it also loads the demo
+data, which you usually do not want in production:
 
 ```bash
 DATABASE_URL='<direct url>' DIRECT_URL='<direct url>' \
 ADMIN_EMAIL='you@murgay.com' ADMIN_PASSWORD='<a real password>' \
 SEED_DEMO_DATA=false npx prisma db seed
 ```
-
-Use the **direct** URL here, and `SEED_DEMO_DATA=false` so no synthetic
-businesses land in production.
 
 ### 5. Check it
 
@@ -658,6 +679,7 @@ npm run lint       # ESLint, zero warnings
 npm run typecheck  # strict TypeScript
 npm test           # logic tests (no database needed)
 npm run test:jobs  # job resumability (needs DATABASE_URL)
+npm run test:bootstrap  # first-run admin bootstrap (needs DATABASE_URL)
 npm run build      # production build
 ```
 

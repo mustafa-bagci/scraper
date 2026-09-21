@@ -1,10 +1,16 @@
 import type { Metadata } from 'next';
+import { CircleAlert, UserPlus } from 'lucide-react';
 import { LoginForm } from '@/components/layout/login-form';
 import { Logo } from '@/components/layout/logo';
+import { ensureAdminUser } from '@/server/auth/bootstrap';
 
 export const metadata: Metadata = { title: 'Sign in' };
+export const dynamic = 'force-dynamic';
 
-export default function LoginPage() {
+export default async function LoginPage() {
+  // A hosted deployment has no terminal to seed from, so the first account is
+  // created here from the environment. This is a no-op once one exists.
+  const bootstrap = await ensureAdminUser();
   return (
     <main className="grid min-h-screen lg:grid-cols-2">
       <div className="flex flex-col justify-center px-6 py-12 sm:px-12 lg:px-16">
@@ -14,6 +20,32 @@ export default function LoginPage() {
           <p className="mt-1.5 text-sm text-muted-foreground">
             Access the Murgay prospecting workspace.
           </p>
+          {bootstrap.status === 'created' || bootstrap.status === 'awaiting-first-login' ? (
+            <p className="mt-6 flex items-start gap-2 rounded-lg border border-success/30 bg-success/10 px-3 py-2.5 text-xs text-success">
+              <UserPlus className="mt-px size-3.5 shrink-0" aria-hidden />
+              <span>
+                Your admin account is ready. Sign in with the <strong>ADMIN_EMAIL</strong> and{' '}
+                <strong>ADMIN_PASSWORD</strong> you configured. This notice disappears after the first sign-in.
+              </span>
+            </p>
+          ) : null}
+
+          {bootstrap.status === 'unconfigured' ? (
+            <div className="mt-6 space-y-2 rounded-lg border border-warning/30 bg-warning/10 px-3 py-2.5 text-xs text-warning">
+              <p className="flex items-start gap-2">
+                <CircleAlert className="mt-px size-3.5 shrink-0" aria-hidden />
+                <span>
+                  <strong>No account exists yet.</strong> {bootstrap.reason}
+                </span>
+              </p>
+              <p className="pl-5 text-2xs leading-relaxed opacity-90">
+                Add <code className="font-mono">ADMIN_EMAIL</code> and <code className="font-mono">ADMIN_PASSWORD</code>{' '}
+                to your deployment&rsquo;s environment variables, redeploy, then reload this page. The account is created
+                once; after that the variables are ignored.
+              </p>
+            </div>
+          ) : null}
+
           <LoginForm className="mt-8" />
         </div>
       </div>
