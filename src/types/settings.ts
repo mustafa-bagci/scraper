@@ -93,11 +93,14 @@ export const DEFAULT_REVIEW_SETTINGS: ReviewSettings = {
 
 export const crawlerSettingsSchema = z.object({
   maxPagesPerDomain: z.number().int().min(1).max(25).default(5),
-  timeoutMs: z.number().int().min(1000).max(60000).default(10000),
+  // 5 pages x 8s, plus robots.txt and the polite delays, is about 47s — inside
+  // a 60s serverless function with room to spare. At 10s it was 58s, which is
+  // not.
+  timeoutMs: z.number().int().min(1000).max(60000).default(8000),
   maxResponseBytes: z.number().int().min(10_000).max(10_000_000).default(2_000_000),
   maxRedirects: z.number().int().min(0).max(10).default(3),
   respectRobotsTxt: z.boolean().default(true),
-  requestDelayMs: z.number().int().min(0).max(10000).default(500),
+  requestDelayMs: z.number().int().min(0).max(10000).default(300),
   userAgent: z.string().min(5).max(200).default('MurgayLeadIntelligence/1.0 (+https://murgay.com/bot)'),
   preferGenericMailboxes: z.boolean().default(true),
 });

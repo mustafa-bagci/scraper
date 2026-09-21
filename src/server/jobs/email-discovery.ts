@@ -22,7 +22,7 @@ const LOCK_TTL_MS = 120_000;
 /** Budget for the tick started by the API route via `after()`. */
 export const INITIAL_TICK_BUDGET_MS = 50_000;
 /** Budget for a tick driven by a client poll — must stay responsive. */
-export const POLL_TICK_BUDGET_MS = 10_000;
+export const POLL_TICK_BUDGET_MS = 20_000;
 
 export type StartEmailJobResult =
   | { ok: true; jobId: string; total: number }
@@ -119,8 +119,25 @@ async function processEmailSlice(jobId: string, budgetMs: number): Promise<Job> 
   const leadIds = payload.leadIds ?? [];
   const shouldVerify = payload.verify ?? true;
 
+  const settings = await getSettings();
   const finder = await getEmailFinder();
   const verifier = await getEmailVerifier();
+
+  /**
+   * How much time to keep in reserve before starting another lead.
+   *
+   * The absolute worst case — every page timing out — is around six times a
+   * typical crawl, and reserving that much would limit a tick to a single
+   * lead. This budgets for a site where a couple of pages hang instead. The
+   * cost of guessing low is bounded: the invocation ends mid-crawl and that
+   * one lead is skipped, which the cursor-first advance above makes safe.
+   */
+  const { maxPagesPerDomain, timeoutMs, requestDelayMs } = settings.crawler;
+  const worstCasePerLead =
+    maxPagesPerDomain * timeoutMs +
+    Math.min(timeoutMs, 6000) +
+    Math.max(0, maxPagesPerDomain - 1) * requestDelayMs;
+  const reservePerLead = Math.min(worstCasePerLead, timeoutMs * 2 + 2000);
 
   // Counters and position accumulate across ticks.
   let cursor = job.cursor;
@@ -130,14 +147,22 @@ async function processEmailSlice(jobId: string, budgetMs: number): Promise<Job> 
 
   const deadline = Date.now() + budgetMs;
   // Every tick processes at least one lead, so a tick can never return without
-  // making progress. The budget is then checked between leads: a crawl always
-  // runs to completion, so a lead is never left half-processed.
+  // making progress. After that a lead is only started if its worst case still
+  // fits, since a crawl always runs to completion once begun.
   let firstLead = true;
 
-  while (cursor < leadIds.length && (firstLead || Date.now() < deadline)) {
+  while (cursor < leadIds.length && (firstLead || Date.now() + reservePerLead <= deadline)) {
     firstLead = false;
     const leadId = leadIds[cursor];
     cursor += 1;
+
+    // The advance is persisted *before* the crawl. Saving it afterwards means
+    // a site slow enough to kill the invocation is retried by every later
+    // tick, and the job never gets past it.
+    await prisma.job.update({
+      where: { id: jobId },
+      data: { cursor, processed: cursor, lockedAt: new Date() },
+    });
 
     const lead = leadId ? await prisma.lead.findUnique({ where: { id: leadId } }) : null;
     if (!lead || !leadId) {
@@ -195,12 +220,12 @@ async function processEmailSlice(jobId: string, budgetMs: number): Promise<Job> 
       });
     }
 
-    processed += 1;
+    // `processed` tracks the cursor, so a lead lost to a killed invocation is
+    // counted as seen rather than silently dropping out of the total.
+    processed = cursor;
     job = await prisma.job.update({
       where: { id: jobId },
       data: {
-        cursor,
-        processed,
         succeeded,
         failed,
         // Refresh the lock so a long slice is not mistaken for a dead one.

@@ -105,7 +105,8 @@ business.
 | `npm run lint` | ESLint, zero-warning policy. |
 | `npm run typecheck` | `tsc --noEmit` in strict mode. |
 | `npm test` | Logic tests for SSRF, email extraction, scoring, filters, dedupe, robots.txt. |
-| `npm run test:jobs` | Resumability tests for the job engine (needs `DATABASE_URL`). |
+| `npm run test:jobs` | Resumability tests for the search engine (needs `DATABASE_URL`). |
+| `npm run test:email-job` | Email job against mid-crawl interruption (needs `DATABASE_URL`). |
 | `npm run test:bootstrap` | First-run admin bootstrap guards (needs `DATABASE_URL`). |
 | `npm run test:env` | Environment parsing, including blank variables. |
 | `npm run test:dataforseo` | DataForSEO request shaping and response mapping (network stubbed). |
@@ -361,8 +362,13 @@ never `VALID`, because nothing local proves a mailbox exists.
 
 ## Website crawler
 
-Defaults: **5 pages per domain**, **10 s timeout**, 2 MB response cap, 3
-redirects, 500 ms between requests — all configurable in **Settings → Crawler**.
+Defaults: **5 pages per domain**, **8 s timeout**, 2 MB response cap, 3
+redirects, 300 ms between requests — all configurable in **Settings → Crawler**.
+
+Those numbers are chosen against the platform's function limit rather than
+picked for their own sake: five pages at 8 s, plus robots.txt and the polite
+delays, is about 47 s, which fits inside a 60 s serverless invocation. At 10 s
+it was 58 s, and a crawl that outlives its invocation costs a lead.
 
 - Same registrable domain only; contact/legal/about pages are visited first.
 - `robots.txt` is parsed and obeyed, including `Crawl-delay`.
@@ -657,6 +663,11 @@ The practical consequences on Vercel:
 - **Keep the tab open for long runs.** Polls are what drive the work after the
   first slice. Closing the tab pauses a job; reopening the search resumes it
   exactly where it stopped — nothing is lost or double-counted.
+- **A lead is claimed before it is crawled.** Saving the cursor afterwards
+  would mean a site slow enough to kill the invocation was retried by every
+  later tick, and the job never got past it. Claiming first bounds the damage
+  to skipping that one lead. A tick also keeps time in reserve before starting
+  another lead, so this is the exception rather than the rule.
 - **Function duration bounds one slice, not the job.** `maxDuration` is set to
   60s, which fits the Hobby plan.
 - **Heavy crawling deserves a real worker.** Website crawling is slow by design
