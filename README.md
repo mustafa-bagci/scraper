@@ -107,6 +107,7 @@ business.
 | `npm test` | Logic tests for SSRF, email extraction, scoring, filters, dedupe, robots.txt. |
 | `npm run test:jobs` | Resumability tests for the job engine (needs `DATABASE_URL`). |
 | `npm run test:bootstrap` | First-run admin bootstrap guards (needs `DATABASE_URL`). |
+| `npm run test:env` | Environment parsing, including blank variables. |
 | `npx prisma migrate dev` | Apply/author migrations in development. |
 | `npx prisma migrate deploy` | Apply migrations in production. |
 | `npx prisma db seed` | Seed the admin account, settings and demo data. |
@@ -564,6 +565,10 @@ Add `ADMIN_EMAIL` and `ADMIN_PASSWORD` too — step 4 explains what they do.
 Optional, only if you want to change a default: `BUSINESS_DATA_PROVIDER`
 (`mock` → `google-places`), `EMAIL_FINDER_PROVIDER`, `EMAIL_VERIFICATION_PROVIDER`.
 
+A variable that exists but is blank counts as unset everywhere — an empty field
+in a dashboard, or a `KEY=""` line in an imported `.env`, gets the default
+rather than failing the app.
+
 ### Where the two database URLs come from
 
 | Provider | `DATABASE_URL` | `DIRECT_URL` |
@@ -689,6 +694,7 @@ npm run typecheck  # strict TypeScript
 npm test           # logic tests (no database needed)
 npm run test:jobs  # job resumability (needs DATABASE_URL)
 npm run test:bootstrap  # first-run admin bootstrap (needs DATABASE_URL)
+npm run test:env   # environment parsing
 npm run build      # production build
 ```
 

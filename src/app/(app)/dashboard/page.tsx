@@ -18,14 +18,30 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { EmptyState } from '@/components/ui/empty-state';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { EmailStatusBadge, LeadStatusBadge, RatingValue, ScorePill } from '@/components/leads/display';
-import { getDashboardData } from '@/server/dashboard/service';
+import { getDashboardData, type DashboardData } from '@/server/dashboard/service';
+import { LoadFailure } from '@/components/dashboard/load-failure';
 import { formatNumber, formatPercent, relativeTime, truncate } from '@/lib/utils';
 
 export const metadata: Metadata = { title: 'Dashboard' };
 export const dynamic = 'force-dynamic';
 
 export default async function DashboardPage() {
-  const data = await getDashboardData(30);
+  let data: DashboardData;
+  try {
+    data = await getDashboardData(30);
+  } catch (error) {
+    console.error('[dashboard] could not load metrics', error);
+    return (
+      <>
+        <PageHeader title="Dashboard" description="Pipeline health across discovery, qualification and contact data." />
+        <LoadFailure
+          area="The dashboard"
+          detail={error instanceof Error ? `${error.name}: ${error.message}` : String(error)}
+        />
+      </>
+    );
+  }
+
   const { metrics } = data;
 
   return (

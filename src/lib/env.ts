@@ -32,16 +32,47 @@ export type Env = z.infer<typeof envSchema>;
 
 let cached: Env | null = null;
 
-export function getEnv(): Env {
-  if (cached) return cached;
+/**
+ * A variable that exists but is blank means the same as one that was never
+ * set — which is what a hosting dashboard produces the moment someone saves a
+ * field without a value, or imports a `.env` with `KEY=""` in it. Zod applies
+ * a default only for `undefined`, so blanks are stripped before parsing;
+ * otherwise an empty box in a UI becomes a hard boot failure.
+ */
+function withoutBlanks(
+  source: NodeJS.ProcessEnv | Record<string, string | undefined>,
+): Record<string, string | undefined> {
+  const result: Record<string, string | undefined> = {};
+  for (const [key, value] of Object.entries(source)) {
+    result[key] = typeof value === 'string' && value.trim() === '' ? undefined : value;
+  }
+  return result;
+}
 
-  const parsed = envSchema.safeParse(process.env);
+/**
+ * Validates an environment. Pure and uncached, so it can be exercised
+ * directly — the blank-variable handling above is worth testing.
+ */
+export function parseEnv(source: NodeJS.ProcessEnv | Record<string, string | undefined>): Env {
+  const parsed = envSchema.safeParse(withoutBlanks(source));
   if (!parsed.success) {
-    const issues = parsed.error.issues.map((i) => `  - ${i.path.join('.')}: ${i.message}`).join('\n');
+    const issues = parsed.error.issues
+      .map((issue) => {
+        const key = issue.path.join('.');
+        const raw = source[key];
+        const blank = typeof raw === 'string' && raw.trim() === '';
+        return `  - ${key}: ${issue.message}${blank ? ' (the variable is set but empty — remove it or give it a value)' : ''}`;
+      })
+      .join('\n');
     throw new Error(`Invalid environment configuration:\n${issues}\n\nSee .env.example.`);
   }
 
-  cached = parsed.data;
+  return parsed.data;
+}
+
+export function getEnv(): Env {
+  if (cached) return cached;
+  cached = parseEnv(process.env);
   return cached;
 }
 

@@ -9,11 +9,18 @@ export default async function AppLayout({ children }: { children: React.ReactNod
   const user = await getCurrentUser();
   if (!user) redirect('/login');
 
-  const statuses = await getProviderStatuses();
-  const businessProvider = statuses.find((status) => status.kind === 'business');
+  // The shell wraps every authenticated page, so a provider lookup that fails
+  // must not be able to black out the whole application.
+  let demoMode = false;
+  try {
+    const statuses = await getProviderStatuses();
+    demoMode = statuses.find((status) => status.kind === 'business')?.activeId === 'mock';
+  } catch (error) {
+    console.error('[layout] could not resolve provider status', error);
+  }
 
   return (
-    <AppShell user={{ name: user.name, email: user.email }} demoMode={businessProvider?.activeId === 'mock'}>
+    <AppShell user={{ name: user.name, email: user.email }} demoMode={demoMode}>
       {children}
     </AppShell>
   );
