@@ -58,6 +58,7 @@ export function SearchConsole({
   maxResults,
   providerLabel,
   providerConfigured,
+  providerHasReviewBreakdown,
 }: {
   initialFilters: LeadFilters;
   defaults: { country: string; resultLimit: number };
@@ -66,6 +67,7 @@ export function SearchConsole({
   maxResults: number;
   providerLabel: string;
   providerConfigured: boolean;
+  providerHasReviewBreakdown: boolean;
 }) {
   const router = useRouter();
   const [filters, setFilters] = useState<LeadFilters>(() => ({
@@ -153,6 +155,16 @@ export function SearchConsole({
       setStarting(false);
     }
   };
+
+  // A provider that cannot supply a star distribution reports every business as
+  // having zero bad reviews, so a bad-review filter silently excludes all of
+  // them. Say so before the search runs rather than after it returns nothing.
+  const usesBadReviewFilter =
+    filters.badReviewCount?.min !== undefined ||
+    filters.badReviewCount?.max !== undefined ||
+    filters.badReviewPercentage?.min !== undefined ||
+    filters.badReviewPercentage?.max !== undefined;
+  const badReviewFilterUnsupported = usesBadReviewFilter && !providerHasReviewBreakdown;
 
   const limit = Math.min(filters.limit ?? defaults.resultLimit, maxResults);
   const estimatedRequests = Math.max(1, Math.ceil(limit / 20));
@@ -314,6 +326,17 @@ export function SearchConsole({
               </p>
             ) : null}
 
+            {badReviewFilterUnsupported ? (
+              <p className="flex items-start gap-2 rounded-lg border border-warning/30 bg-warning/10 px-3 py-2 text-2xs text-warning">
+                <CircleAlert className="mt-px size-3.5 shrink-0" aria-hidden />
+                <span>
+                  {providerLabel} does not publish a 1★–5★ breakdown, so every business counts as having zero bad
+                  reviews and this filter would exclude all of them. Clear the bad-review filters, or connect a provider
+                  that supplies the distribution.
+                </span>
+              </p>
+            ) : null}
+
             <div className="space-y-1.5 rounded-lg border border-border bg-secondary/50 px-3 py-2.5">
               <p className="flex items-center gap-1.5 text-2xs font-semibold uppercase tracking-wide text-muted-foreground">
                 <Wallet className="size-3.5" aria-hidden />
@@ -341,7 +364,12 @@ export function SearchConsole({
               </dl>
             </div>
 
-            <Button className="w-full" onClick={runSearch} loading={busy} disabled={busy}>
+            <Button
+              className="w-full"
+              onClick={runSearch}
+              loading={busy}
+              disabled={busy || badReviewFilterUnsupported}
+            >
               {!busy && <Search />}
               {busy ? 'Searching…' : 'Search businesses'}
             </Button>

@@ -678,11 +678,26 @@ with Redis (Upstash); the interface is already the right shape.
    verification provider if you have one.
 3. Review **Settings → Cost control** before the first live search.
 
-Note the honest limitation: the Places API returns an average rating and a total
-review count, but **not** a star distribution. With it selected, bad-review
-columns show `n/a` rather than a guess. A provider that supplies a full
-breakdown (DataForSEO, Outscraper, …) restores those columns — the abstraction
-is already in place.
+### The Places API limitation, stated plainly
+
+The Places API returns an average rating and a total review count, but **not**
+a star distribution. With it selected:
+
+- Bad-review columns show `n/a` rather than a guess.
+- **A bad-review filter matches nothing.** Every business reports zero bad
+  reviews, so `badReviewCount >= 10` excludes all of them. The search page
+  detects this and blocks the search with an explanation instead of letting you
+  pay for a query that returns an empty list.
+- Text Search caps out at 60 results per query.
+
+Since filtering on a poor review profile is the point of this platform, Google
+Places alone is a weak fit for the core workflow. It is fine for building a
+contact list in a category and city, and for feeding the email finder.
+
+A provider that publishes the distribution — DataForSEO, Outscraper, Apify —
+restores those columns and the filter. The abstraction is already in place: one
+class in `src/lib/providers/business/`, one entry in `AVAILABLE_PROVIDERS`, no
+other change anywhere.
 
 ---
 

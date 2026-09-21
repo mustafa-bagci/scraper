@@ -41,6 +41,7 @@ export default async function SearchPage({
           maxResults={Math.min(settings.limits.maxBusinessesPerSearch, provider.capabilities.maxResultsPerSearch)}
           providerLabel={businessStatus?.activeLabel ?? provider.name}
           providerConfigured={businessStatus?.configured ?? provider.isConfigured()}
+          providerHasReviewBreakdown={provider.capabilities.reviewBreakdown}
         />
       </div>
     </>
