@@ -7,6 +7,7 @@ import { LeadStatus } from '@prisma/client';
 import {
   ArrowDown,
   ArrowUp,
+  CheckCheck,
   ChevronLeft,
   ChevronRight,
   Columns3,
@@ -357,12 +358,15 @@ export function LeadsTable({
           {/* The header checkbox can only reach this page; say so, and offer
               the rest rather than letting the count be mistaken for the lot. */}
           {selected.size < total ? (
-            <div className="flex flex-wrap items-center gap-x-2 gap-y-1 text-xs text-muted-foreground">
-              <span>
-                {formatNumber(total)} leads match {activeFilterCount > 0 ? 'this filter' : 'in total'}, over{' '}
-                {formatNumber(pageCount)} pages.
+            <div className="flex flex-wrap items-center gap-2">
+              <span className="text-xs text-muted-foreground">
+                Only this page. {formatNumber(total)} leads match{' '}
+                {activeFilterCount > 0 ? 'this filter' : 'in total'}, over {formatNumber(pageCount)} pages.
               </span>
-              <Button size="sm" variant="link" className="h-auto p-0" onClick={selectAllMatching} loading={selectingAll}>
+              {/* A link here read as part of the sentence, so the rest of the
+                  result set looked like a statement rather than an offer. */}
+              <Button size="sm" variant="outline" onClick={selectAllMatching} loading={selectingAll}>
+                {!selectingAll && <CheckCheck />}
                 Select all {formatNumber(total)}
               </Button>
             </div>
@@ -653,7 +657,10 @@ function LeadCell({ column, row }: { column: ColumnId; row: LeadRow }) {
         </span>
       ) : row.emailStatus === 'UNKNOWN' ? (
         // Nobody has looked yet — different from having looked and found none.
-        <span className="text-muted-foreground">—</span>
+        // Named rather than dashed, so the column and the filter agree.
+        <span title="No public-email check has been run for this lead yet.">
+          <EmailStatusBadge status={row.emailStatus} />
+        </span>
       ) : (
         <span title={noEmailReason(row)}>
           <EmailStatusBadge status={row.emailStatus} />
