@@ -521,25 +521,43 @@ the app is compiled.
 
 ### 3. Environment variables
 
-Set these for **Production** (and Preview, if you use it):
+Three variables are required. Everything else has a working default.
 
 ```
-DATABASE_URL       postgres://…-pooler…       # pooled
-DIRECT_URL         postgres://…               # direct
-AUTH_SECRET        <openssl rand -base64 48>
-SEED_DEMO_DATA     false
-BUSINESS_DATA_PROVIDER   mock                 # or google-places
-EMAIL_FINDER_PROVIDER    website-crawler
-EMAIL_VERIFICATION_PROVIDER  none
+DATABASE_URL   postgres://…-pooler…/db?sslmode=require   # pooled
+DIRECT_URL     postgres://…/db?sslmode=require           # direct, no pooler
+AUTH_SECRET    <openssl rand -base64 48>
 ```
+
+Set them for **Production** (and Preview, if you use it).
 
 `AUTH_SECRET` signs session cookies **and** derives the key that encrypts
 provider API keys at rest. Rotating it logs everyone out and makes stored keys
 unreadable, so generate it once and keep it.
 
-Provider API keys are better added in **Settings → Data Providers** once the app
-is up — they are encrypted in the database rather than sitting in environment
-variables.
+`DIRECT_URL` is only read by `prisma migrate` during the build — the running app
+never uses it — but the build fails without it, so it has to be set. If your
+database has no separate pooler, use the same value for both.
+
+**Do not set these in Vercel:**
+
+- `ADMIN_EMAIL` / `ADMIN_PASSWORD` / `SEED_DEMO_DATA` — these belong to the seed
+  command, which you run from your own machine (step 4). Vercel never runs it.
+- Provider API keys — add them in **Settings → Data Providers** once the app is
+  up, where they are encrypted in the database instead of sitting in plain text
+  in an environment variable.
+
+Optional, only if you want to change a default: `BUSINESS_DATA_PROVIDER`
+(`mock` → `google-places`), `EMAIL_FINDER_PROVIDER`, `EMAIL_VERIFICATION_PROVIDER`.
+
+### Where the two database URLs come from
+
+| Provider | `DATABASE_URL` | `DIRECT_URL` |
+|---|---|---|
+| **Neon** | the connection string with **Pooled connection** on (host contains `-pooler`) | the same string with pooling off |
+| **Vercel Postgres** | `POSTGRES_PRISMA_URL` | `POSTGRES_URL_NON_POOLING` |
+| **Supabase** | Connection pooling string, port `6543` | Direct connection, port `5432` |
+| **Plain Postgres** | your connection string | the same string |
 
 ### 4. Create the admin account
 
