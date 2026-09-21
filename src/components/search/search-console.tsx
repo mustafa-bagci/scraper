@@ -168,7 +168,11 @@ export function SearchConsole({
     filters.badReviewPercentage?.max !== undefined;
   const badReviewFilterUnsupported = usesBadReviewFilter && !providerHasReviewBreakdown;
 
-  const limit = Math.min(filters.limit ?? defaults.resultLimit, maxResults);
+  const requestedLimit = filters.limit ?? defaults.resultLimit;
+  const limit = Math.min(requestedLimit, maxResults);
+  // Asking for more than the ceiling used to be trimmed without a word, which
+  // reads as the provider having run out of businesses.
+  const limitCapped = requestedLimit > maxResults;
   const estimatedRequests = Math.max(1, Math.ceil(limit / 20));
   const estimatedCost = limit * costPerBusiness;
   const resultsHref = `/leads?${filtersToSearchParams(filters).toString()}`;
@@ -300,12 +304,22 @@ export function SearchConsole({
             <PresenceFilter id="website" label="Website" value={filters.website} onChange={(value) => update('website', value)} />
             <PresenceFilter id="email" label="Email" value={filters.email} onChange={(value) => update('email', value)} />
             <PresenceFilter id="phone" label="Phone" value={filters.phone} onChange={(value) => update('phone', value)} />
-            <Field label="Results" htmlFor="limit" hint={`Provider ceiling: ${formatNumber(maxResults)}`}>
+            <Field
+              label="Results"
+              htmlFor="limit"
+              hint={
+                limitCapped
+                  ? `Capped at ${formatNumber(maxResults)} — raise "Max businesses per search" in Settings → Cost control.`
+                  : `Ceiling: ${formatNumber(maxResults)}`
+              }
+            >
               <Input
                 id="limit"
                 type="number"
                 min={1}
                 max={maxResults}
+                aria-invalid={limitCapped}
+                className={limitCapped ? 'border-warning focus-visible:ring-warning' : undefined}
                 value={filters.limit ?? defaults.resultLimit}
                 onChange={(event) => update('limit', Number(event.target.value) || undefined)}
               />

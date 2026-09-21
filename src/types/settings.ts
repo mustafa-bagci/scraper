@@ -111,10 +111,10 @@ export const DEFAULT_CRAWLER_SETTINGS: CrawlerSettings = crawlerSettingsSchema.p
 // --- Cost control -----------------------------------------------------------
 
 export const limitSettingsSchema = z.object({
-  maxBusinessesPerSearch: z.number().int().min(1).max(1000).default(100),
-  maxEmailLookupsPerDay: z.number().int().min(1).max(100000).default(200),
-  maxVerificationsPerDay: z.number().int().min(1).max(100000).default(200),
-  maxSearchesPerDay: z.number().int().min(1).max(10000).default(20),
+  maxBusinessesPerSearch: z.number().int().min(1).max(1000).default(500),
+  maxEmailLookupsPerDay: z.number().int().min(1).max(100000).default(500),
+  maxVerificationsPerDay: z.number().int().min(1).max(100000).default(500),
+  maxSearchesPerDay: z.number().int().min(1).max(10000).default(50),
   /**
    * Indicative cost per business record, used only for the pre-search estimate.
    * Deliberately pessimistic: one DataForSEO record was observed at $0.01236,
