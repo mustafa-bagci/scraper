@@ -108,6 +108,7 @@ business.
 | `npm run test:jobs` | Resumability tests for the job engine (needs `DATABASE_URL`). |
 | `npm run test:bootstrap` | First-run admin bootstrap guards (needs `DATABASE_URL`). |
 | `npm run test:env` | Environment parsing, including blank variables. |
+| `npm run test:dataforseo` | DataForSEO request shaping and response mapping (network stubbed). |
 | `npx prisma migrate dev` | Apply/author migrations in development. |
 | `npx prisma migrate deploy` | Apply migrations in production. |
 | `npx prisma db seed` | Seed the admin account, settings and demo data. |
@@ -197,6 +198,7 @@ Two rules hold throughout:
 | `GET` `POST` | `/api/export` | Download CSV / XLSX / JSON. |
 | `POST` | `/api/import` | `mode: "preview"` then `mode: "commit"`. |
 | `GET` `PATCH` | `/api/providers` | Provider selection and encrypted API keys. |
+| `POST` | `/api/providers/test` | One live query against the active provider, for checking the mapping. |
 | `GET` `PATCH` | `/api/settings` | Read / write a settings section. |
 | `GET` `POST` | `/api/saved-searches` | List / create saved searches. |
 | `PATCH` `DELETE` | `/api/saved-searches/:id` | Rename, re-filter, delete. |
@@ -672,11 +674,34 @@ with Redis (Upstash); the interface is already the right shape.
 
 ## Connecting a live provider
 
-1. **Settings → Data Providers** → choose *Google Places API* → paste the key →
-   Save. (Or set `BUSINESS_DATA_PROVIDER` / `BUSINESS_DATA_API_KEY`.)
+1. **Settings → Data Providers** → choose a provider → paste the credential →
+   Save → **Test connection**, which runs one live query and shows you the
+   record exactly as the app read it. (Or set `BUSINESS_DATA_PROVIDER` /
+   `BUSINESS_DATA_API_KEY`.)
+
+| Provider | Credential | Star distribution |
+|---|---|---|
+| **DataForSEO Business Listings** | `login:password` | **yes** — bad-review counts, percentages and filters all work |
+| **Google Places API** | API key | no — see below |
 2. **Settings → Email Providers** → *Website crawler* needs no key. Choose a
    verification provider if you have one.
 3. Review **Settings → Cost control** before the first live search.
+
+### DataForSEO
+
+`business_data/business_listings/search/live`, authenticated with your API
+login and password sent as HTTP Basic. It publishes `rating_distribution`,
+which is what fills the bad-review columns and makes their filters meaningful,
+and returns up to 1,000 records per search.
+
+Two things it does not do: review *text* (the listings endpoint carries counts
+only, so the lead page reports review details as unavailable), and free-text
+categories — `categories` is matched against DataForSEO's own taxonomy, so put
+plain words like "cabinet dentaire" in **Keyword**, which searches the business
+title, and use **Category** for a taxonomy term such as `dentist`.
+
+Country, region, city and postal code are pushed to the API as filters, so you
+are not billed for records the local filter engine would throw away.
 
 ### The Places API limitation, stated plainly
 
@@ -710,6 +735,7 @@ npm test           # logic tests (no database needed)
 npm run test:jobs  # job resumability (needs DATABASE_URL)
 npm run test:bootstrap  # first-run admin bootstrap (needs DATABASE_URL)
 npm run test:env   # environment parsing
+npm run test:dataforseo  # DataForSEO mapping (no network needed)
 npm run build      # production build
 ```
 

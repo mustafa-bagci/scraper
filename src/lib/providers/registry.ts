@@ -4,6 +4,7 @@ import { getEnv } from '@/lib/env';
 import { decryptSecret } from '@/lib/security/crypto';
 import { getSettings } from '@/lib/settings/service';
 import type { BusinessDataProvider } from './business/BusinessDataProvider';
+import { DataForSEOProvider } from './business/DataForSEOProvider';
 import { GooglePlacesProvider } from './business/GooglePlacesProvider';
 import { MockBusinessProvider } from './business/MockBusinessProvider';
 import type { EmailFinderProvider, EmailVerificationProvider } from './email/EmailFinderProvider';
@@ -47,6 +48,14 @@ export const AVAILABLE_PROVIDERS: ProviderDescriptor[] = [
     label: 'Mock provider (demo data)',
     description: 'Deterministic synthetic businesses. No API key, no network calls, no cost.',
     requiresApiKey: false,
+  },
+  {
+    kind: 'business',
+    id: 'dataforseo',
+    label: 'DataForSEO Business Listings',
+    description:
+      'Publishes the 1★–5★ distribution, so bad-review counts, percentages and filters all work. Credentials are your API login and password as login:password.',
+    requiresApiKey: true,
   },
   {
     kind: 'business',
@@ -112,6 +121,8 @@ export async function getBusinessProvider(): Promise<BusinessDataProvider> {
   const selection = await resolveSelection('business', env.BUSINESS_DATA_PROVIDER, env.BUSINESS_DATA_API_KEY);
 
   switch (selection.id) {
+    case 'dataforseo':
+      return new DataForSEOProvider(selection.apiKey);
     case 'google-places':
       return new GooglePlacesProvider(selection.apiKey);
     case 'mock':

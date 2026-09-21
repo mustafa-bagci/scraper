@@ -95,6 +95,15 @@ export interface BusinessDataProvider {
   getBusinessDetails(externalId: string): Promise<NormalizedBusiness | null>;
 
   getBusinessReviews(externalId: string): Promise<ProviderReview[]>;
+
+  /**
+   * Optional. Runs one minimal live call and returns the raw provider payload.
+   *
+   * Field mappings are written against documentation, which drifts; this gives
+   * the operator a way to show what their account actually returns without
+   * needing server logs.
+   */
+  probe?(): Promise<unknown>;
 }
 
 /** Errors surfaced to the operator without leaking keys or stack traces. */

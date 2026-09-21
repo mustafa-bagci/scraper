@@ -2,12 +2,13 @@
 
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { AlertTriangle, KeyRound, Plus, Trash2 } from 'lucide-react';
+import { AlertTriangle, KeyRound, Plug, Plus, Trash2 } from 'lucide-react';
 import { toast } from 'sonner';
 import { apiFetch, ApiClientError } from '@/lib/api/client';
 import type { AppSettings, ScoringRule } from '@/types/settings';
 import { SCORING_METRICS, SCORING_OPERATORS } from '@/types/settings';
 import type { ProviderDescriptor, ProviderStatus } from '@/lib/providers/registry';
+import type { ProviderTestResult } from '@/types/provider-test';
 import { NumberField, SectionForm } from './section-form';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
@@ -646,6 +647,8 @@ function ProviderCard({
   const [selected, setSelected] = useState(status?.activeId ?? options[0]?.id ?? '');
   const [apiKey, setApiKey] = useState('');
   const [saving, setSaving] = useState(false);
+  const [testing, setTesting] = useState(false);
+  const [testResult, setTestResult] = useState<string | null>(null);
 
   const descriptor = options.find((option) => option.id === selected);
 
@@ -663,6 +666,26 @@ function ProviderCard({
       toast.error(error instanceof ApiClientError ? error.message : 'The provider could not be saved.');
     } finally {
       setSaving(false);
+    }
+  };
+
+  const runTest = async () => {
+    setTesting(true);
+    setTestResult(null);
+    try {
+      const result = await apiFetch<ProviderTestResult>('/api/providers/test', {
+        method: 'POST',
+        body: { country: 'France', city: 'Lyon', category: 'dentist', raw: true },
+      });
+      setTestResult(JSON.stringify(result, null, 2));
+      if (result.ok) toast.success(`${result.provider.name} answered`, { description: `${result.ms} ms` });
+      else toast.error(result.error ?? 'The provider call failed.');
+    } catch (error) {
+      const message = error instanceof ApiClientError ? error.message : 'The provider could not be reached.';
+      setTestResult(message);
+      toast.error(message);
+    } finally {
+      setTesting(false);
     }
   };
 
@@ -729,16 +752,35 @@ function ProviderCard({
           </p>
         ) : null}
 
-        <div className="flex items-center justify-between gap-3 border-t border-border pt-3">
+        <div className="flex flex-wrap items-center justify-between gap-3 border-t border-border pt-3">
           <p className="flex items-center gap-1.5 text-2xs text-muted-foreground">
             <KeyRound className="size-3.5" aria-hidden />
             Keys are encrypted at rest and never sent to the browser.
             {status?.source === 'environment' ? ' Currently read from the environment.' : ''}
           </p>
-          <Button size="sm" onClick={save} loading={saving}>
-            Save provider
-          </Button>
+          <div className="flex items-center gap-2">
+            {kind === 'business' ? (
+              <Button size="sm" variant="outline" onClick={runTest} loading={testing}>
+                <Plug />
+                Test connection
+              </Button>
+            ) : null}
+            <Button size="sm" onClick={save} loading={saving}>
+              Save provider
+            </Button>
+          </div>
         </div>
+
+        {testResult ? (
+          <div className="space-y-1.5">
+            <p className="text-2xs font-semibold uppercase tracking-wide text-muted-foreground">
+              Live response — one record, as the app read it
+            </p>
+            <pre className="scrollbar-thin max-h-80 overflow-auto rounded-lg border border-border bg-secondary/50 px-3 py-2.5 font-mono text-2xs leading-relaxed">
+              {testResult}
+            </pre>
+          </div>
+        ) : null}
       </CardContent>
     </Card>
   );

@@ -16,7 +16,7 @@ const envSchema = z.object({
   ADMIN_EMAIL: z.string().email().default('admin@murgay.com'),
   ADMIN_PASSWORD: z.string().min(8).default('ChangeMe!2026'),
 
-  BUSINESS_DATA_PROVIDER: z.enum(['mock', 'google-places']).default('mock'),
+  BUSINESS_DATA_PROVIDER: z.enum(['mock', 'google-places', 'dataforseo']).default('mock'),
   BUSINESS_DATA_API_KEY: z.string().optional(),
 
   EMAIL_FINDER_PROVIDER: z.enum(['mock', 'website-crawler']).default('website-crawler'),

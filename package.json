@@ -11,6 +11,7 @@
     "typecheck": "tsc --noEmit",
     "test": "tsx --conditions=react-server tests/logic.test.mts",
     "test:env": "tsx --conditions=react-server tests/env.test.mts",
+    "test:dataforseo": "tsx --conditions=react-server tests/dataforseo.test.mts",
     "test:jobs": "tsx --conditions=react-server tests/jobs.test.mts",
     "test:bootstrap": "tsx --conditions=react-server tests/bootstrap.test.mts",
     "db:migrate": "prisma migrate dev",
